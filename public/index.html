@@ -794,8 +794,26 @@
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F5F5F5" stroke-width="2.2"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
             <div class="eyebrow">HABIT</div>
+            <div style="margin-left:auto;display:flex;gap:8px;">
+              <button class="icon-btn" onclick="startEditHabit()" title="Edit habit">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button class="icon-btn" onclick="deleteHabit()" title="Delete habit" style="color:var(--negative);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
           </div>
           <h1 id="habitDetailName" style="font-size:20px;margin:2px 0 14px;">—</h1>
+
+          <div class="add-goal-form" id="editHabitForm" style="margin-bottom:14px;">
+            <input type="text" id="editHabitName" placeholder="HABIT NAME" maxlength="30">
+            <input type="text" id="editHabitSub" placeholder="CATEGORY" maxlength="20">
+            <input type="number" id="editHabitXp" placeholder="XP PER COMPLETION" min="5" max="50">
+            <div style="display:flex;gap:8px;">
+              <button onclick="cancelEditHabit()" style="flex:1;background:var(--card);color:var(--text-secondary);border:1px solid var(--border);">CANCEL</button>
+              <button onclick="saveEditHabit()" style="flex:1;">SAVE</button>
+            </div>
+          </div>
 
           <div class="stat-mini-grid">
             <div class="stat-mini"><div class="label-sec">CURRENT STREAK</div><div class="v" id="habitDetailStreak">—</div></div>
@@ -1314,7 +1332,10 @@
   });
 
   /* ---------- habit detail ---------- */
+  let currentHabitId = null;
   window.openHabit = function(id){
+    currentHabitId = id;
+    document.getElementById('editHabitForm').classList.remove('open');
     const h = HABITS.find(x=>x.id===id);
     document.getElementById('habitDetailName').textContent = h.name;
     document.getElementById('habitDetailStreak').textContent = currentStreak(h)+' DAYS';
@@ -1326,6 +1347,46 @@
       return '<div class="heat-cell '+(s==='done'?'done':s==='partial'?'partial':'')+'"></div>';
     }).join('');
     openOverlay('habitOverlay');
+  };
+
+  window.startEditHabit = function(){
+    const h = HABITS.find(x=>x.id===currentHabitId);
+    if(!h) return;
+    document.getElementById('editHabitName').value = h.name;
+    document.getElementById('editHabitSub').value = h.sub;
+    document.getElementById('editHabitXp').value = h.xp;
+    document.getElementById('editHabitForm').classList.add('open');
+  };
+  window.cancelEditHabit = function(){
+    document.getElementById('editHabitForm').classList.remove('open');
+  };
+  window.saveEditHabit = function(){
+    const h = HABITS.find(x=>x.id===currentHabitId);
+    if(!h) return;
+    const name = document.getElementById('editHabitName').value.trim();
+    if(!name) return;
+    const dup = HABITS.find(x=>x.id!==h.id && x.name.toLowerCase()===name.toLowerCase());
+    if(dup) return; // another habit already has that name — bail out silently
+    const sub = document.getElementById('editHabitSub').value.trim().toUpperCase() || 'DAILY';
+    const xpRaw = parseInt(document.getElementById('editHabitXp').value, 10);
+    h.name = name.toUpperCase();
+    h.sub = sub;
+    h.xp = Number.isFinite(xpRaw) && xpRaw>0 ? xpRaw : h.xp;
+    document.getElementById('editHabitForm').classList.remove('open');
+    saveState();
+    openHabit(h.id); // refresh the overlay's own display
+    renderAll(true);  // refresh grid/home/streaks etc. behind it
+  };
+  window.deleteHabit = function(){
+    const h = HABITS.find(x=>x.id===currentHabitId);
+    if(!h) return;
+    if(!confirm('Delete "'+h.name+'"? This removes its full history and can\'t be undone.')) return;
+    const idx = HABITS.indexOf(h);
+    if(idx>=0) HABITS.splice(idx,1);
+    if(activeHeatHabit===h.id) activeHeatHabit = HABITS.length ? HABITS[0].id : null;
+    saveState();
+    closeOverlay('habitOverlay');
+    renderAll(true);
   };
 
   /* ---------- overlays ---------- */
