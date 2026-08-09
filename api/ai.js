@@ -1,8 +1,13 @@
 // Vercel serverless function — any file under /api becomes a route at
 // /api/<filename>, so this file alone handles POST /api/ai. Same logic as
 // server.js (used for local dev / self-hosting), just in Vercel's handler shape.
+//
+// Calls Google's Gemini API (Interactions endpoint) instead of Anthropic's —
+// no SDK dependency needed, plain fetch() is enough (Node 18+ / Vercel both
+// ship a global fetch).
 
-import Anthropic from '@anthropic-ai/sdk';
+const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/interactions';
+const GEMINI_MODEL = 'gemini-3.6-flash';
 
 const SYSTEM_PROMPT = `You are the AI productivity analyst inside LEDGER, a dark, data-dense habit-tracking app.
 
@@ -41,46 +46,62 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Per-request key from the app's Settings modal (Authorization: Bearer sk-ant-...)
+  // Per-request key from the app's Settings modal (Authorization: Bearer AIza...)
   // takes priority; falls back to a Vercel-configured env var for single-user setups.
   const authHeader = req.headers['authorization'] || '';
   const requestKey = authHeader.replace(/^Bearer\s+/i, '').trim();
-  const apiKey = requestKey || process.env.ANTHROPIC_API_KEY;
+  const apiKey = requestKey || process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    res.status(401).json({ error: 'No API key. Add one in the app’s AI settings, or set ANTHROPIC_API_KEY in Vercel’s project environment variables.' });
+    res.status(401).json({ error: 'No API key. Add one in the app’s AI settings, or set GEMINI_API_KEY in Vercel’s project environment variables.' });
     return;
   }
 
   try {
-    const client = new Anthropic({ apiKey });
-    const response = await client.messages.create({
-      model: 'claude-opus-5',              // swap for claude-sonnet-5 / claude-haiku-4-5 if cost matters more than depth
-      max_tokens: 400,
-      output_config: { effort: 'low' },     // this is a quick Q&A, not a hard reasoning task — keep it snappy
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content:
-            `DATA SNAPSHOT (JSON — this is the only data you may reference):\n${JSON.stringify(snapshot)}\n\n` +
-            `USER QUESTION: ${question}`,
-        },
-      ],
+    const geminiRes = await fetch(GEMINI_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        model: GEMINI_MODEL,
+        system_instruction: SYSTEM_PROMPT,
+        input:
+          `DATA SNAPSHOT (JSON — this is the only data you may reference):\n${JSON.stringify(snapshot)}\n\n` +
+          `USER QUESTION: ${question}`,
+      }),
     });
 
-    const text = response.content.find((b) => b.type === 'text')?.text ?? '';
+    const rawData = await geminiRes.json().catch(() => ({}));
+    // Error responses come back wrapped in an array: [{ "error": {...} }].
+    // Success responses do not. Unwrap either shape into a plain object.
+    const data = Array.isArray(rawData) ? (rawData[0] ?? {}) : rawData;
+
+    if (!geminiRes.ok) {
+      const message = data?.error?.message || `Gemini returned ${geminiRes.status}`;
+      // Google returns 400 INVALID_ARGUMENT (not 401/403) for a bad key —
+      // detect it by the structured "reason" field, not just the HTTP status.
+      const invalidKey = (data?.error?.details || []).some((d) => d.reason === 'API_KEY_INVALID');
+      if (invalidKey || geminiRes.status === 401 || geminiRes.status === 403) {
+        res.status(401).json({ error: 'That API key was rejected by Google. Double-check it in the app’s AI settings.' });
+        return;
+      }
+      if (geminiRes.status === 429) {
+        res.status(429).json({ error: 'Rate limited — try again in a moment.' });
+        return;
+      }
+      res.status(502).json({ error: message });
+      return;
+    }
+
+    const modelStep = (data.steps || []).find((s) => s.type === 'model_output');
+    const textBlock = modelStep?.content?.find((c) => c.type === 'text');
+    const text = textBlock?.text ?? '';
+
     res.status(200).json({ answer: text });
   } catch (err) {
     console.error('AI request failed:', err);
-    if (err instanceof Anthropic.AuthenticationError) {
-      res.status(401).json({ error: 'That API key was rejected by Anthropic. Double-check it in the app’s AI settings.' });
-      return;
-    }
-    if (err instanceof Anthropic.RateLimitError) {
-      res.status(429).json({ error: 'Rate limited — try again in a moment.' });
-      return;
-    }
     res.status(502).json({ error: 'The AI analyst is unavailable right now.' });
   }
 }

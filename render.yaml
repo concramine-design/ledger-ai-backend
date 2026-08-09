@@ -1,6 +1,6 @@
 # Render "Blueprint" — lets Render auto-configure this service when you connect
 # the repo, instead of filling the build/start commands in by hand.
-# ANTHROPIC_API_KEY is intentionally NOT set here — you paste it into Render's
+# GEMINI_API_KEY is intentionally NOT set here — you paste it into Render's
 # own dashboard (Environment tab) after the service is created, never in this file.
 services:
   - type: web
@@ -10,5 +10,5 @@ services:
     buildCommand: npm install
     startCommand: node server.js
     envVars:
-      - key: ANTHROPIC_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
