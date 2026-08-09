@@ -459,6 +459,41 @@
   .modal-btn-save{background:var(--text);color:#0a0a0a;}
   .modal-btn-cancel{background:var(--card);color:var(--text-secondary);border-color:var(--border);}
   .modal-btn-disconnect{background:var(--negative-dim);color:var(--negative);border-color:transparent;margin-top:8px;width:100%;}
+
+  /* ===== Focus mode ===== */
+  select#focusHabitLink{
+    width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;
+    padding:10px 12px;color:var(--text);font-size:13px;font-family:inherit;outline:none;
+  }
+  .chip.focus-active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  /* Full-screen, no-nav, distraction-free — sits above the navbar (z-index 40)
+     and every overlay so there is no path back to the rest of the app while a
+     session is running. Only visible while .running is set on it. */
+  #focusRunning{
+    display:none;
+    position:absolute;inset:0;z-index:300;
+    background:var(--bg);
+    flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:24px;
+  }
+  #focusRunning.running{display:flex;}
+  .focus-timer{
+    font-family:var(--font-mono);font-weight:600;font-variant-numeric:tabular-nums;
+    font-size:56px;letter-spacing:-.01em;margin-top:14px;color:var(--text);
+  }
+  .focus-distract-btn{
+    margin-top:28px;padding:10px 18px;border-radius:20px;
+    background:var(--negative-dim);color:var(--negative);border:1px solid transparent;
+    font-family:var(--font-mono);font-size:11.5px;font-weight:700;letter-spacing:.04em;
+    cursor:pointer;
+  }
+  .focus-distract-btn:active{transform:scale(.97);}
+  .focus-control-btn{
+    padding:13px 20px;border-radius:10px;border:1px solid var(--border);
+    background:var(--card);color:var(--text-secondary);font-weight:700;font-size:12px;
+    letter-spacing:.04em;font-family:var(--font-mono);cursor:pointer;flex:1;
+  }
+  .focus-end-btn{background:transparent;color:var(--negative);border-color:var(--negative);}
 </style>
 
 <div class="studio-wrap">
@@ -504,6 +539,23 @@
               <span class="mono label-sec" id="habitDoneCount">0/5</span>
             </div>
             <div class="card" id="todayHabitList" style="padding:4px 12px;"></div>
+          </div>
+
+          <div class="section">
+            <div class="section-head"><span class="eyebrow">FOCUS TODAY</span></div>
+            <div class="card" style="cursor:pointer;" onclick="openFocusIntention()">
+              <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+                <div>
+                  <div class="num-huge" style="font-size:26px;" id="focusTodayTime">0m</div>
+                  <div class="label-sec" style="margin-top:5px;" id="focusTodaySessions">0 SESSIONS</div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="mono" style="font-size:15px;font-weight:700;color:var(--accent);" id="focusStaminaHome">15 MIN</div>
+                  <div class="label-sec" style="margin-top:3px;">STAMINA TARGET</div>
+                </div>
+              </div>
+              <button class="generate-btn" style="margin-top:12px;background:var(--accent);border-color:var(--accent);color:#fff;" onclick="event.stopPropagation();openFocusIntention();">START FOCUS SESSION</button>
+            </div>
           </div>
 
           <div class="section">
@@ -596,6 +648,20 @@
             <div class="label-sec" style="margin-top:2px;" id="monthlyLabel">MONTHLY COMPLETION</div>
             <div id="monthlyChart" style="margin-top:10px;"></div>
             <div class="chart-xlabels"><span>1</span><span>5</span><span>10</span><span>15</span><span>20</span><span>25</span><span>30</span></div>
+          </div>
+
+          <div class="section">
+            <div class="section-head"><span class="eyebrow">FOCUS</span></div>
+            <div class="stat-mini-grid">
+              <div class="stat-mini"><div class="label-sec">TOTAL FOCUS</div><div class="v" id="focusTotalTime">0m</div></div>
+              <div class="stat-mini"><div class="label-sec">AVG SESSION</div><div class="v" id="focusAvgSession">0m</div></div>
+              <div class="stat-mini"><div class="label-sec">FOCUS STAMINA</div><div class="v" id="focusStaminaStat">15 MIN</div></div>
+              <div class="stat-mini"><div class="label-sec">FOCUS STREAK</div><div class="v" id="focusStreakStat">0D</div></div>
+            </div>
+            <div class="card" id="focusHistoryCard" style="margin-top:10px;display:none;">
+              <div class="label-sec" style="margin-bottom:6px;">SESSION LENGTH TREND</div>
+              <div id="focusHistoryChart"></div>
+            </div>
           </div>
 
           <div class="section">
@@ -766,6 +832,64 @@
           </div>
         </div>
 
+        <!-- ============ FOCUS OVERLAY (intention + summary) ============ -->
+        <div class="overlay" id="focusOverlay">
+          <div class="overlay-head">
+            <button class="back-btn" onclick="closeOverlay('focusOverlay')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F5F5F5" stroke-width="2.2"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="eyebrow">FOCUS SESSION</div>
+          </div>
+
+          <div id="focusSetup">
+            <h1 style="font-size:19px;margin:2px 0 16px;line-height:1.35;">What are you focusing on?</h1>
+            <div class="modal-field">
+              <label>TASK</label>
+              <input type="text" id="focusTask" placeholder="e.g. Chemistry revision" maxlength="60" autocomplete="off">
+            </div>
+            <div class="modal-field">
+              <label>DEFINITION OF DONE — OPTIONAL</label>
+              <input type="text" id="focusDone" placeholder="e.g. Finish exercises 1-20" maxlength="80" autocomplete="off">
+            </div>
+            <div class="modal-field">
+              <label>TARGET DURATION</label>
+              <div class="chip-row" id="focusDurationChips" style="margin-bottom:4px;"></div>
+            </div>
+            <div class="modal-field" id="focusHabitLinkWrap">
+              <label>LINK TO A HABIT — OPTIONAL</label>
+              <select id="focusHabitLink">
+                <option value="">— none —</option>
+              </select>
+            </div>
+            <button class="generate-btn" style="background:var(--accent);border-color:var(--accent);color:#fff;" onclick="startFocusSession()">START FOCUS</button>
+          </div>
+
+          <div id="focusSummary" style="display:none;">
+            <h1 style="font-size:19px;margin:2px 0 4px;" id="focusSummaryTitle">Session complete</h1>
+            <div class="num-huge" id="focusSummaryTime">0:00</div>
+            <div class="label-sec" style="margin-top:4px;">FOCUSED</div>
+            <div class="stat-mini-grid" style="margin-top:16px;">
+              <div class="stat-mini"><div class="label-sec">INTERRUPTIONS</div><div class="v" id="focusSummaryInterruptions">0</div></div>
+              <div class="stat-mini"><div class="label-sec">XP EARNED</div><div class="v" style="color:var(--positive);" id="focusSummaryXp">+0</div></div>
+            </div>
+            <p class="label-sec" style="margin-top:16px;line-height:1.65;" id="focusSummaryNote"></p>
+            <button class="generate-btn" onclick="closeOverlay('focusOverlay')">DONE</button>
+          </div>
+        </div>
+
+        <!-- ============ FOCUS RUNNING (full-screen, no nav, minimal) ============ -->
+        <div id="focusRunning">
+          <div class="label-sec" id="focusRunningTask">TASK</div>
+          <div class="focus-timer" id="focusRunningTime">00:00</div>
+          <div class="bar" style="width:220px;margin:18px auto 0;"><div class="bar-fill accent" id="focusRunningBar" style="width:0%;"></div></div>
+          <div class="label-sec" style="margin-top:10px;" id="focusRunningTarget">TARGET 25 MIN</div>
+          <button class="focus-distract-btn" onclick="logFocusDistraction()">I GOT DISTRACTED — <span id="focusInterruptCount">0</span></button>
+          <div style="display:flex;gap:10px;margin-top:26px;">
+            <button class="focus-control-btn" id="focusPauseBtn" onclick="toggleFocusPause()">PAUSE</button>
+            <button class="focus-control-btn focus-end-btn" onclick="endFocusSession()">END SESSION</button>
+          </div>
+        </div>
+
         <!-- ============ AI SETTINGS MODAL ============ -->
         <div class="modal-backdrop" id="aiSettingsBackdrop">
           <div class="modal-box">
@@ -835,6 +959,8 @@
   const HABITS = [];
   const GOALS = [];
   let CUSTOM_REWARDS = [];
+  const FOCUS_SESSIONS = []; // completed/ended sessions only — runtime state lives in focusRuntime
+  let focusStamina = 15; // adaptive target duration (minutes), nudged up/down by real session outcomes
 
   const HIST_DAYS = 30;
 
@@ -925,6 +1051,7 @@
         savedDate: todayISO(),
         level, xp, xpToday, lifetimeXp,
         habits: HABITS, goals: GOALS, customRewards: CUSTOM_REWARDS,
+        focusSessions: FOCUS_SESSIONS, focusStamina,
       }));
     } catch(e){ /* storage full or unavailable — app still works this session */ }
   }
@@ -955,6 +1082,8 @@
       }
       if(Array.isArray(saved.goals)) GOALS.splice(0, GOALS.length, ...saved.goals);
       if(Array.isArray(saved.customRewards)) CUSTOM_REWARDS = saved.customRewards;
+      if(Array.isArray(saved.focusSessions)) FOCUS_SESSIONS.splice(0, FOCUS_SESSIONS.length, ...saved.focusSessions);
+      if(Number.isFinite(saved.focusStamina)) focusStamina = saved.focusStamina;
       if(Number.isFinite(saved.level)) level = saved.level;
       if(Number.isFinite(saved.xp)) xp = saved.xp;
       if(Number.isFinite(saved.lifetimeXp)) lifetimeXp = saved.lifetimeXp;
@@ -1428,6 +1557,206 @@
     }).join('') : '<div class="label-sec" style="padding:6px 0;">No personal rewards yet — add one below.</div>');
   }
 
+  /* ---------- Focus Mode ---------- */
+  // Real-permission reality check: a web app / TWA cannot block other native
+  // apps or intercept OS notifications (that needs Android Accessibility
+  // Service-level access, only available to a full native app). What we CAN
+  // do honestly: a distraction-free full-screen timer, self-reported
+  // interruptions, and real analytics on the sessions you actually run.
+
+  function awardXp(amount){
+    xp += amount; xpToday += amount;
+    if(amount>0) lifetimeXp += amount;
+    if(xp >= xpReq(level)){ xp -= xpReq(level); level += 1; }
+    if(xp < 0 && level>1){ level -=1; xp += xpReq(level); }
+  }
+
+  function formatMinSec(totalSeconds){
+    const m = Math.round(totalSeconds/60);
+    if(m<60) return m+'m';
+    return Math.floor(m/60)+'h '+(m%60)+'m';
+  }
+  function formatClock(totalSeconds){
+    const m = Math.floor(totalSeconds/60), s = Math.floor(totalSeconds%60);
+    return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  }
+
+  function computeFocusStats(){
+    const totalSec = FOCUS_SESSIONS.reduce((s,f)=>s+f.actualSec,0);
+    const avgSec = FOCUS_SESSIONS.length ? totalSec/FOCUS_SESSIONS.length : 0;
+    const today = todayISO();
+    const todaySessions = FOCUS_SESSIONS.filter(f=>f.startedAt.slice(0,10)===today);
+    const todaySec = todaySessions.reduce((s,f)=>s+f.actualSec,0);
+    return { totalSec, avgSec, todaySec, todayCount: todaySessions.length };
+  }
+
+  function focusStreakCount(){
+    const doneDays = new Set(FOCUS_SESSIONS.filter(f=>f.completed).map(f=>f.startedAt.slice(0,10)));
+    let streak = 0;
+    const cursor = new Date(now);
+    if(!doneDays.has(todayISO())) cursor.setDate(cursor.getDate()-1); // today not over yet — don't break the streak
+    while(true){
+      const iso = cursor.getFullYear()+'-'+String(cursor.getMonth()+1).padStart(2,'0')+'-'+String(cursor.getDate()).padStart(2,'0');
+      if(doneDays.has(iso)){ streak++; cursor.setDate(cursor.getDate()-1); } else break;
+    }
+    return streak;
+  }
+
+  function renderFocus(){
+    const stats = computeFocusStats();
+    const homeTime = document.getElementById('focusTodayTime');
+    if(homeTime){
+      homeTime.textContent = stats.todaySec ? formatMinSec(stats.todaySec) : '0m';
+      document.getElementById('focusTodaySessions').textContent = stats.todayCount+' SESSION'+(stats.todayCount===1?'':'S');
+      document.getElementById('focusStaminaHome').textContent = focusStamina+' MIN';
+    }
+    const totalEl = document.getElementById('focusTotalTime');
+    if(totalEl){
+      totalEl.textContent = stats.totalSec ? formatMinSec(stats.totalSec) : '0m';
+      document.getElementById('focusAvgSession').textContent = stats.avgSec ? formatMinSec(stats.avgSec) : '0m';
+      document.getElementById('focusStaminaStat').textContent = focusStamina+' MIN';
+      document.getElementById('focusStreakStat').textContent = focusStreakCount()+'D';
+
+      const histCard = document.getElementById('focusHistoryCard');
+      if(FOCUS_SESSIONS.length>=2){
+        histCard.style.display = '';
+        const recent = FOCUS_SESSIONS.slice(-10).map(f=>Math.round(f.actualSec/60));
+        document.getElementById('focusHistoryChart').innerHTML = lineChart(recent,{h:80,color:COLORS.accent});
+      } else {
+        histCard.style.display = 'none';
+      }
+    }
+  }
+
+  window.openFocusIntention = function(){
+    document.getElementById('focusTask').value = '';
+    document.getElementById('focusDone').value = '';
+    document.getElementById('focusSetup').style.display = '';
+    document.getElementById('focusSummary').style.display = 'none';
+
+    const presets = [...new Set([15,25,Math.max(5,Math.round(focusStamina)),45,60])].sort((a,b)=>a-b);
+    selectedFocusDuration = Math.round(focusStamina) || 15;
+    document.getElementById('focusDurationChips').innerHTML = presets.map(p=>
+      '<button type="button" class="chip'+(p===selectedFocusDuration?' focus-active':'')+'" onclick="selectFocusDuration('+p+',this)">'+p+' MIN</button>'
+    ).join('');
+
+    const sel = document.getElementById('focusHabitLink');
+    sel.innerHTML = '<option value="">— none —</option>'+HABITS.map(h=>'<option value="'+h.id+'">'+h.name+'</option>').join('');
+
+    openOverlay('focusOverlay');
+  };
+
+  let selectedFocusDuration = 15;
+  window.selectFocusDuration = function(min, btn){
+    selectedFocusDuration = min;
+    document.querySelectorAll('#focusDurationChips .chip').forEach(c=>c.classList.remove('focus-active'));
+    btn.classList.add('focus-active');
+  };
+
+  let focusRuntime = null; // { task, doneDefinition, plannedMin, habitId, startedAt, pausedMs, pauseStartedAt, interruptions, tickHandle }
+
+  window.startFocusSession = function(){
+    const task = document.getElementById('focusTask').value.trim();
+    if(!task) return;
+    focusRuntime = {
+      task,
+      doneDefinition: document.getElementById('focusDone').value.trim(),
+      plannedMin: selectedFocusDuration,
+      habitId: document.getElementById('focusHabitLink').value || null,
+      startedAt: Date.now(),
+      pausedMs: 0,
+      pauseStartedAt: null,
+      interruptions: 0,
+    };
+    closeOverlay('focusOverlay');
+    document.getElementById('focusRunningTask').textContent = task.toUpperCase();
+    document.getElementById('focusRunningTarget').textContent = 'TARGET '+selectedFocusDuration+' MIN';
+    document.getElementById('focusInterruptCount').textContent = '0';
+    document.getElementById('focusPauseBtn').textContent = 'PAUSE';
+    document.getElementById('focusRunning').classList.add('running');
+    tickFocusTimer();
+    focusRuntime.tickHandle = setInterval(tickFocusTimer, 1000);
+  };
+
+  function focusElapsedMs(){
+    if(!focusRuntime) return 0;
+    const pausedNow = focusRuntime.pauseStartedAt ? (Date.now()-focusRuntime.pauseStartedAt) : 0;
+    return Date.now() - focusRuntime.startedAt - focusRuntime.pausedMs - pausedNow;
+  }
+  function tickFocusTimer(){
+    if(!focusRuntime) return;
+    const elapsedSec = Math.max(0, focusElapsedMs()/1000);
+    document.getElementById('focusRunningTime').textContent = formatClock(elapsedSec);
+    const pct = Math.min(100, elapsedSec/(focusRuntime.plannedMin*60)*100);
+    document.getElementById('focusRunningBar').style.width = pct+'%';
+  }
+
+  window.logFocusDistraction = function(){
+    if(!focusRuntime) return;
+    focusRuntime.interruptions++;
+    document.getElementById('focusInterruptCount').textContent = focusRuntime.interruptions;
+  };
+
+  window.toggleFocusPause = function(){
+    if(!focusRuntime) return;
+    const btn = document.getElementById('focusPauseBtn');
+    if(focusRuntime.pauseStartedAt){
+      focusRuntime.pausedMs += Date.now()-focusRuntime.pauseStartedAt;
+      focusRuntime.pauseStartedAt = null;
+      btn.textContent = 'PAUSE';
+    } else {
+      focusRuntime.pauseStartedAt = Date.now();
+      btn.textContent = 'RESUME';
+    }
+  };
+
+  window.endFocusSession = function(){
+    if(!focusRuntime) return;
+    clearInterval(focusRuntime.tickHandle);
+    const actualSec = Math.max(0, Math.round(focusElapsedMs()/1000));
+    const completed = actualSec >= focusRuntime.plannedMin*60;
+
+    const actualMin = actualSec/60;
+    const interruptionFactor = Math.max(0.5, 1 - focusRuntime.interruptions*0.1);
+    const xpEarned = Math.max(0, Math.round(actualMin*interruptionFactor) + (completed?10:0));
+
+    FOCUS_SESSIONS.push({
+      id: 'f'+Date.now(), task: focusRuntime.task, doneDefinition: focusRuntime.doneDefinition,
+      plannedMin: focusRuntime.plannedMin, actualSec, interruptions: focusRuntime.interruptions,
+      completed, xpEarned, startedAt: new Date(focusRuntime.startedAt).toISOString(), endedAt: new Date().toISOString(),
+    });
+
+    if(completed && focusRuntime.interruptions<=1) focusStamina = Math.min(120, focusStamina+5);
+    else if(!completed || focusRuntime.interruptions>=4) focusStamina = Math.max(10, focusStamina-5);
+
+    awardXp(xpEarned);
+
+    let habitNote = '';
+    if(focusRuntime.habitId){
+      const h = HABITS.find(x=>x.id===focusRuntime.habitId);
+      if(h && completed){
+        const changed = applyHabitCompletion(h, true);
+        habitNote = changed ? ' '+h.name+' marked done too (+'+h.xp+' XP).' : '';
+      }
+    }
+
+    document.getElementById('focusRunning').classList.remove('running');
+    document.getElementById('focusSummaryTitle').textContent = completed ? 'Session complete' : 'Session ended early';
+    document.getElementById('focusSummaryTime').textContent = formatClock(actualSec);
+    document.getElementById('focusSummaryInterruptions').textContent = focusRuntime.interruptions;
+    document.getElementById('focusSummaryXp').textContent = '+'+xpEarned;
+    document.getElementById('focusSummaryNote').textContent = completed
+      ? 'Nice work — that\'s still progress toward your Focus Stamina.'+habitNote
+      : 'That still counts. Focused '+formatClock(actualSec)+' out of a '+focusRuntime.plannedMin+' min target — recovery, not failure.';
+    document.getElementById('focusSetup').style.display = 'none';
+    document.getElementById('focusSummary').style.display = '';
+    openOverlay('focusOverlay');
+
+    focusRuntime = null;
+    saveState();
+    renderAll(true);
+  };
+
   /* ---------- AI insights (computed locally from real data, no network call) ---------- */
   window.toggleInsight = function(card){
     const d = card.querySelector('.insight-detail');
@@ -1436,6 +1765,29 @@
 
   function computeInsights(){
     const insights = [];
+
+    if(FOCUS_SESSIONS.length>=3){
+      const recent = FOCUS_SESSIONS.slice(-3);
+      const earlier = FOCUS_SESSIONS.slice(0, -3);
+      if(earlier.length){
+        const avg = arr => arr.reduce((s,f)=>s+f.actualSec,0)/arr.length/60;
+        const recentAvg = avg(recent), earlierAvg = avg(earlier);
+        const delta = recentAvg - earlierAvg;
+        if(Math.abs(delta) >= 2){
+          const up = delta > 0;
+          insights.push({
+            tag:'FOCUS TREND', tagClass: up?'good':'warn', headline: up ? 'Focus sessions getting longer' : 'Focus sessions getting shorter',
+            bodyHtml: '<div class="insight-compare">'+
+              '<span class="v" style="color:var(--text-secondary);">'+Math.round(earlierAvg)+'m</span>'+
+              '<span class="arrow">→</span>'+
+              '<span class="v" style="color:'+(up?'var(--positive)':'var(--negative)')+';">'+Math.round(recentAvg)+'m</span></div>',
+            detail: 'Your last 3 focus sessions averaged '+Math.round(recentAvg)+' minutes, versus '+Math.round(earlierAvg)+' minutes before that.',
+            homeText: 'Recent focus sessions are averaging '+Math.round(recentAvg)+'m, '+(up?'up':'down')+' from '+Math.round(earlierAvg)+'m.',
+          });
+        }
+      }
+    }
+
     if(!HABITS.length) return insights;
 
     const deltas = HABITS.map(h=>({h, delta:weekOverWeekDelta(h)}));
@@ -1587,6 +1939,16 @@
         completion7d: Math.round(completionPct(h,7)*10)/10,
       })),
       goals: GOALS.map(g=>({ name: g.name, pct: g.pct, weekDelta: g.weekDelta, deadline: g.deadline })),
+      focus: (function(){
+        const stats = computeFocusStats();
+        return {
+          totalMinutes: Math.round(stats.totalSec/60),
+          avgSessionMinutes: Math.round(stats.avgSec/60*10)/10,
+          sessionsCount: FOCUS_SESSIONS.length,
+          currentStaminaMinutes: focusStamina,
+          streakDays: focusStreakCount(),
+        };
+      })(),
     };
   }
 
@@ -1914,6 +2276,7 @@
     renderHeatmap();
     renderRewards();
     renderAIConnStatus();
+    renderFocus();
     renderInsights();
   }
 
