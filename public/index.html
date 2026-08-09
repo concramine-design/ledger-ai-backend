@@ -774,7 +774,7 @@
         <div class="modal-backdrop" id="aiSettingsBackdrop">
           <div class="modal-box">
             <h2>Connect AI backend</h2>
-            <p class="hint">Your key is stored only in this browser (localStorage) and sent only to the backend URL below — never anywhere else. It calls your own server, which calls the Claude API.</p>
+            <p class="hint">Your key is stored only in this browser (localStorage) and sent only to the backend URL below — never anywhere else. It calls your own server, which calls the Gemini API.</p>
             <div class="modal-field">
               <label>Backend URL</label>
               <input type="text" id="aiUrlInput" placeholder="http://localhost:3000/api/ai" autocomplete="off">
@@ -1374,7 +1374,7 @@
       return;
     }
 
-    // Connected: call the user's own backend, which calls the Claude API
+    // Connected: call the user's own backend, which calls the Gemini API
     // server-side. The key never goes anywhere except that one URL.
     try{
       const res = await fetch(cfg.backendUrl, {
