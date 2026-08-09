@@ -551,7 +551,7 @@
             <div class="card" style="border-color:var(--accent);background:linear-gradient(180deg,rgba(76,141,255,0.08),transparent);cursor:pointer;" onclick="goTab('ai')">
               <div style="display:flex;gap:10px;align-items:flex-start;">
                 <svg width="15" height="15" style="flex-shrink:0;margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="#4C8DFF" stroke-width="1.8"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19" stroke-linecap="round"/></svg>
-                <p style="margin:0;font-size:13px;line-height:1.55;color:var(--text);">"Your study consistency increased <b style="color:var(--positive);">18%</b> this week. Sessions logged before 12:00 finish at a much higher rate."</p>
+                <p style="margin:0;font-size:13px;line-height:1.55;color:var(--text);" id="homeInsightText">Complete a few habits this week to unlock insights.</p>
               </div>
             </div>
           </div>
@@ -669,49 +669,15 @@
 
           <div class="section" style="margin-top:6px;">
             <div class="eyebrow" style="margin-bottom:8px;">INSIGHTS</div>
-
-            <div class="card insight-card" onclick="toggleInsight(this)">
-              <div class="insight-tag">PATTERN DETECTED</div>
-              <div class="insight-headline">STUDY</div>
-              <div class="insight-compare">
-                <span class="v" style="color:var(--positive);">91%</span>
-                <span class="label-sec" style="color:var(--text-muted);">before 12:00</span>
-                <span class="arrow">vs</span>
-                <span class="v" style="color:var(--text-secondary);">64%</span>
-                <span class="label-sec" style="color:var(--text-muted);">after 18:00</span>
-              </div>
-              <div class="insight-detail"><p>Sessions started in the morning finish at a much higher rate. Scheduling STUDY before noon on 12 of the last 14 days correlated with same-day completion.</p></div>
-            </div>
-
-            <div class="card insight-card" onclick="toggleInsight(this)">
-              <div class="insight-tag good">CONSISTENCY</div>
-              <div class="insight-headline">READING has improved</div>
-              <div style="display:flex;align-items:baseline;gap:8px;margin-top:6px;">
-                <span class="num-huge" style="font-size:24px;color:var(--positive);">+24%</span>
-                <span class="label-sec">OVER LAST 30 DAYS</span>
-              </div>
-              <div class="insight-detail"><p>READ 20P completion rose from 64% to 88% across the last 30 days, with zero misses in the last 9 days — your longest run this quarter.</p></div>
-            </div>
-
-            <div class="card insight-card" onclick="toggleInsight(this)">
-              <div class="insight-tag warn">WEAK POINT</div>
-              <div class="insight-headline">WORKOUT completion dropped</div>
-              <div class="insight-compare">
-                <span class="v" style="color:var(--text-secondary);">84%</span>
-                <span class="arrow">→</span>
-                <span class="v" style="color:var(--negative);">61%</span>
-              </div>
-              <div class="insight-detail"><p>Four of the last six missed sessions fell on days with 6+ scheduled tasks. Consider moving WORKOUT earlier on high-load days.</p></div>
-            </div>
+            <div id="insightsBody"></div>
           </div>
 
           <div class="section">
             <div class="eyebrow" style="margin-bottom:8px;">DAILY PLANNER</div>
             <div class="card">
-              <div id="plannerBody">
-                <p style="font-size:12.5px;color:var(--text-secondary);margin:2px 0 0;line-height:1.6;">The AI can build an optimized schedule from your goal priorities, habit frequency, deadlines and past completion behavior.</p>
-                <button class="generate-btn" id="genPlanBtn">GENERATE TODAY'S PLAN</button>
-              </div>
+              <p style="font-size:12.5px;color:var(--text-secondary);margin:2px 0 0;line-height:1.6;">Builds today's plan from your real habits and goals — a reasoned AI plan when connected, a simple XP-sorted list otherwise.</p>
+              <button class="generate-btn" id="genPlanBtn">GENERATE TODAY'S PLAN</button>
+              <div id="plannerBody" style="margin-top:10px;"></div>
             </div>
           </div>
 
@@ -724,15 +690,7 @@
                 <button class="ai-conn-link" id="aiConnLink" onclick="openAISettings()">CONNECT</button>
               </div>
               <div class="chat-scroll" id="chatScroll">
-                <div class="bubble user">Why was my productivity lower this week?</div>
-                <div class="bubble ai">
-                  Your completion rate fell from <b>86%</b> to <b>72%</b>. The largest change came from:
-                  <div class="stat-line"><span>WORKOUT</span><b style="color:var(--negative);">91% → 58%</b></div>
-                  <div class="stat-line"><span>STUDY</span><b style="color:var(--negative);">94% → 76%</b></div>
-                  <div class="stat-line"><span>READING</span><b style="color:var(--text-secondary);">88% → 83%</b></div>
-                  Study completion was also lower on days scheduled with more than 6 tasks.
-                  <div class="label-sec" style="margin-top:8px;color:var(--text-muted);">(sample reply — connect a backend for live answers)</div>
-                </div>
+                <div class="bubble ai">Ask me anything about your habits, goals, streaks, or XP. I only answer from your real logged data — I'll say so if there isn't enough yet.</div>
               </div>
               <div class="suggest-row">
                 <button class="suggest-chip" onclick="askAI(this)">What's my best streak right now?</button>
@@ -1485,11 +1443,102 @@
     }).join('') : '<div class="label-sec" style="padding:6px 0;">No personal rewards yet — add one below.</div>');
   }
 
-  /* ---------- AI insight toggle ---------- */
+  /* ---------- AI insights (computed locally from real data, no network call) ---------- */
   window.toggleInsight = function(card){
     const d = card.querySelector('.insight-detail');
     d.classList.toggle('open');
   };
+
+  function computeInsights(){
+    const insights = [];
+    if(!HABITS.length) return insights;
+
+    const deltas = HABITS.map(h=>({h, delta:weekOverWeekDelta(h)}));
+
+    const best = [...deltas].sort((a,b)=>b.delta-a.delta)[0];
+    if(best && best.delta >= 3){
+      insights.push({
+        tag:'CONSISTENCY', tagClass:'good', headline: best.h.name+' has improved',
+        bodyHtml: '<div style="display:flex;align-items:baseline;gap:8px;margin-top:6px;">'+
+          '<span class="num-huge" style="font-size:24px;color:var(--positive);">+'+best.delta.toFixed(1)+'%</span>'+
+          '<span class="label-sec">VS LAST WEEK</span></div>',
+        detail: best.h.name+' completion is up '+best.delta.toFixed(1)+' points over the last 7 days versus the 7 before that.',
+        homeText: best.h.name+' is up +'+best.delta.toFixed(1)+'% this week.',
+      });
+    }
+
+    const worst = [...deltas].sort((a,b)=>a.delta-b.delta)[0];
+    if(worst && worst.delta <= -3 && (!best || worst.h.id!==best.h.id)){
+      const thisWk = completionPct(worst.h,7);
+      const lastWk = Math.max(0, Math.min(100, thisWk - worst.delta));
+      insights.push({
+        tag:'WEAK POINT', tagClass:'warn', headline: worst.h.name+' completion dropped',
+        bodyHtml: '<div class="insight-compare">'+
+          '<span class="v" style="color:var(--text-secondary);">'+Math.round(lastWk)+'%</span>'+
+          '<span class="arrow">→</span>'+
+          '<span class="v" style="color:var(--negative);">'+Math.round(thisWk)+'%</span></div>',
+        detail: worst.h.name+' fell '+Math.abs(worst.delta).toFixed(1)+' points over the last week — worth a closer look at what changed.',
+        homeText: worst.h.name+' dropped '+Math.abs(worst.delta).toFixed(1)+'% this week.',
+      });
+    }
+
+    // Weekday pattern across all logged history (today excluded while still undecided)
+    const totals = Array(7).fill(0), counts = Array(7).fill(0);
+    HABITS.forEach(h=>{
+      h.history.forEach((s,i)=>{
+        const daysAgo = HIST_DAYS-1-i;
+        if(daysAgo===0 && s==='empty') return;
+        const dow = ((todayDow-daysAgo)%7+7)%7;
+        counts[dow]++;
+        totals[dow] += s==='done'?1:s==='partial'?0.5:0;
+      });
+    });
+    const dayAvg = totals.map((t,i)=> counts[i] ? t/counts[i]*100 : null);
+    let bestDay=-1, worstDay=-1;
+    dayAvg.forEach((v,i)=>{
+      if(v===null) return;
+      if(bestDay===-1 || v>dayAvg[bestDay]) bestDay=i;
+      if(worstDay===-1 || v<dayAvg[worstDay]) worstDay=i;
+    });
+    if(bestDay>=0 && worstDay>=0 && bestDay!==worstDay && (dayAvg[bestDay]-dayAvg[worstDay])>=15){
+      insights.push({
+        tag:'PATTERN DETECTED', tagClass:'', headline:'Weekday performance',
+        bodyHtml: '<div class="insight-compare">'+
+          '<span class="v" style="color:var(--positive);">'+Math.round(dayAvg[bestDay])+'%</span>'+
+          '<span class="label-sec" style="color:var(--text-muted);">'+WEEKDAYS[bestDay]+'</span>'+
+          '<span class="arrow">vs</span>'+
+          '<span class="v" style="color:var(--text-secondary);">'+Math.round(dayAvg[worstDay])+'%</span>'+
+          '<span class="label-sec" style="color:var(--text-muted);">'+WEEKDAYS[worstDay]+'</span></div>',
+        detail: 'Across your logged history, '+WEEKDAYS[bestDay]+' averages '+Math.round(dayAvg[bestDay])+'% completion — your strongest day. '+WEEKDAYS[worstDay]+' is weakest at '+Math.round(dayAvg[worstDay])+'%.',
+        homeText: 'Your strongest day is '+WEEKDAYS[bestDay]+' ('+Math.round(dayAvg[bestDay])+'%), weakest is '+WEEKDAYS[worstDay]+' ('+Math.round(dayAvg[worstDay])+'%).',
+      });
+    }
+
+    return insights;
+  }
+
+  function renderInsights(){
+    const body = document.getElementById('insightsBody');
+    const homeText = document.getElementById('homeInsightText');
+    if(!body) return;
+    const insights = computeInsights();
+
+    body.innerHTML = insights.length ? insights.map(ins=>
+      '<div class="card insight-card" onclick="toggleInsight(this)">'+
+        '<div class="insight-tag'+(ins.tagClass?' '+ins.tagClass:'')+'">'+ins.tag+'</div>'+
+        '<div class="insight-headline">'+ins.headline+'</div>'+
+        ins.bodyHtml+
+        '<div class="insight-detail"><p>'+ins.detail+'</p></div>'+
+      '</div>'
+    ).join('') : '<div class="card" style="text-align:center;padding:20px 0;"><div class="label-sec">'+
+      (HABITS.length ? 'NOT ENOUGH HISTORY YET — CHECK BACK IN A FEW DAYS' : 'ADD HABITS TO UNLOCK INSIGHTS')+'</div></div>';
+
+    if(homeText){
+      const priority = insights.find(i=>i.tag==='WEAK POINT') || insights.find(i=>i.tag==='CONSISTENCY') || insights[0];
+      homeText.textContent = priority ? priority.homeText
+        : (HABITS.length ? 'Complete a few habits this week to unlock insights.' : 'Add your first habit to start tracking insights.');
+    }
+  }
 
   /* ---------- AI connection settings (bring-your-own-key) ---------- */
   const AI_KEY_STORAGE = 'ledger_ai_key';
@@ -1559,15 +1608,18 @@
   /* ---------- AI chat ---------- */
   const OFFLINE_DEMO_ANSWERS = {
     "What's my best streak right now?": function(){
+      if(!HABITS.length) return "You don't have any habits yet — add one in the Habits tab first.";
       const best = [...HABITS].sort((a,b)=>currentStreak(b)-currentStreak(a))[0];
       return best.name+' is your longest active streak at <b style="color:'+COLORS.positive+';">'+currentStreak(best)+' days</b>, closing in on its best of '+bestStreak(best)+'.';
     },
     "Which goal needs attention?": function(){
+      if(!GOALS.length) return "You don't have any goals yet — add one in the Goals tab first.";
       const worst = [...GOALS].sort((a,b)=>a.weekDelta-b.weekDelta)[0];
       return '<b>'+worst.name+'</b> grew the slowest this week at <b style="color:'+(worst.weekDelta>=0?COLORS.positive:COLORS.negative)+';">'+(worst.weekDelta>=0?'+':'')+worst.weekDelta+'%</b>. It sits at '+worst.pct.toFixed(1)+'% overall.';
     },
     "Plan tomorrow for me": function(){
-      return 'Based on your goal priorities and completion history, I would schedule STUDY and QCM before noon, then WORKOUT mid-afternoon. Open the Daily Planner card above and tap Generate to see full timing.';
+      if(!HABITS.length) return "You don't have any habits yet — add one in the Habits tab first.";
+      return 'Open the Daily Planner card above and tap Generate — it builds today\'s schedule from your actual habits and goals.';
     },
   };
 
@@ -1684,18 +1736,55 @@
   document.getElementById('chatInput').addEventListener('keydown', function(e){ if(e.key==='Enter') sendChat(); });
 
   /* ---------- daily planner ---------- */
-  const PLAN = [
-    {time:'09:00', title:'STUDY — 60 MIN', sub:'DEEP WORK', xp:20},
-    {time:'11:00', title:'QCM — 30 QUESTIONS', sub:'PRACTICE', xp:25},
-    {time:'15:00', title:'WORKOUT — 45 MIN', sub:'HIGH PRIORITY · 61% RECENT', xp:15},
-    {time:'19:00', title:'READ — 20 PAGES', sub:'DAILY', xp:10},
-  ];
-  document.getElementById('genPlanBtn').addEventListener('click', function(){
-    const total = PLAN.reduce((s,p)=>s+p.xp,0);
-    document.getElementById('plannerBody').innerHTML =
-      PLAN.map(p=>'<div class="planner-row"><div class="planner-time mono">'+p.time+'</div><div class="planner-main"><div class="planner-title">'+p.title+'</div><div class="planner-sub">'+p.sub+'</div></div><div class="planner-xp">+'+p.xp+' XP</div></div>').join('')+
+  // Local fallback: today's not-yet-done habits, real names/XP, highest XP first.
+  // No invented clock times — we don't track a preferred time per habit.
+  function renderLocalPlan(){
+    const remaining = HABITS.filter(h=>todayState(h)!=='done').sort((a,b)=>b.xp-a.xp);
+    const body = document.getElementById('plannerBody');
+    if(!HABITS.length){
+      body.innerHTML = '<p class="label-sec" style="margin:2px 0 0;">Add a habit first — the planner works from your real habit list.</p>';
+      return;
+    }
+    if(!remaining.length){
+      body.innerHTML = '<p class="label-sec" style="margin:2px 0 0;color:var(--positive);">Everything on today\'s list is already done. Nothing left to plan.</p>';
+      return;
+    }
+    const total = remaining.reduce((s,h)=>s+h.xp,0);
+    body.innerHTML =
+      remaining.map(h=>'<div class="planner-row"><div class="planner-time mono">TODO</div><div class="planner-main"><div class="planner-title">'+h.name+'</div><div class="planner-sub">'+h.sub+'</div></div><div class="planner-xp">+'+h.xp+' XP</div></div>').join('')+
       '<div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;">'+
-      '<span class="label-sec">TOTAL POTENTIAL</span><span class="mono" style="color:'+COLORS.positive+';font-weight:700;font-size:16px;">+'+total+' XP</span></div>';
+      '<span class="label-sec">TOTAL POTENTIAL</span><span class="mono" style="color:'+COLORS.positive+';font-weight:700;font-size:16px;">+'+total+' XP</span></div>'+
+      '<div class="label-sec" style="margin-top:8px;color:var(--text-muted);">Sorted by XP — connect the AI (⚙ below) for a reasoned, priority-based plan instead.</div>';
+  }
+
+  document.getElementById('genPlanBtn').addEventListener('click', async function(){
+    const cfg = getAIConfig();
+    if(!cfg.apiKey){
+      renderLocalPlan();
+      return;
+    }
+    const body = document.getElementById('plannerBody');
+    body.innerHTML = '<div class="typing" style="padding:6px 0;"><span></span><span></span><span></span></div>';
+    try{
+      const res = await fetch(cfg.backendUrl, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', 'Authorization':'Bearer '+cfg.apiKey},
+        body: JSON.stringify({
+          question: "Build me an optimized plan for the rest of today. Prioritize by goal deadlines and habits not yet completed today. List concrete action items with their real XP values, most important first, and give a total potential XP at the end.",
+          snapshot: buildDataSnapshot(),
+        }),
+      });
+      let data = {};
+      try { data = await res.json(); } catch(e){}
+      if(!res.ok){
+        body.innerHTML = '<p class="label-sec" style="color:var(--negative);margin:2px 0 0;">AI backend error: '+(data.error||'unknown error')+'</p>';
+        return;
+      }
+      if(Array.isArray(data.actions) && data.actions.length){ applyAIActions(data.actions); renderAll(true); }
+      body.innerHTML = data.answer ? formatAIMarkdown(data.answer) : '<p class="label-sec" style="margin:2px 0 0;">(empty response)</p>';
+    } catch(err){
+      body.innerHTML = '<p class="label-sec" style="color:var(--negative);margin:2px 0 0;">Could not reach '+cfg.backendUrl+'.</p>';
+    }
   });
 
   /* ---------- interactions ---------- */
@@ -1840,6 +1929,7 @@
     renderHeatmap();
     renderRewards();
     renderAIConnStatus();
+    renderInsights();
   }
 
   loadState();
