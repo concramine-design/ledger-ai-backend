@@ -346,6 +346,8 @@
   .bubble.ai{align-self:flex-start;background:var(--card);border:1px solid var(--border);border-bottom-left-radius:3px;}
   .bubble.ai .stat-line{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:12px;margin-top:2px;padding:3px 0;}
   .bubble.ai .stat-line b{font-weight:700;}
+  .ai-action-log{font-family:var(--font-mono);font-size:11.5px;color:var(--positive);border-left:2px solid var(--positive);padding-left:8px;}
+  .ai-action-log div{padding:2px 0;}
   .suggest-row{display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;}
   .suggest-chip{
     font-size:11.5px;font-family:var(--font-mono);color:var(--text-secondary);
@@ -1263,14 +1265,7 @@
   /* ---------- AI connection settings (bring-your-own-key) ---------- */
   const AI_KEY_STORAGE = 'ledger_ai_key';
   const AI_URL_STORAGE = 'ledger_ai_backend_url';
-  // Same-origin by default: if this page is served over http(s) — from this very
-  // backend, from your PC, or from a phone on the same network — point at /api/ai
-  // on whatever host actually served the page. Only fall back to localhost:3000
-  // when the page has no real origin (e.g. opened as a bare local file:// or inside
-  // the sandboxed claude.ai Artifact preview).
-  const AI_DEFAULT_URL = (location.protocol === 'http:' || location.protocol === 'https:')
-    ? (location.origin + '/api/ai')
-    : 'http://localhost:3000/api/ai';
+  const AI_DEFAULT_URL = 'http://localhost:3000/api/ai';
 
   function getAIConfig(){
     return {
@@ -1420,7 +1415,23 @@
         appendBubble('AI backend error ('+res.status+'): '+(data.error || 'unknown error'), 'ai');
         return;
       }
-      appendBubble(formatAIMarkdown(data.answer || '(empty response)'), 'ai', true);
+
+      const hasText = !!(data.answer && data.answer.trim());
+      const hasActions = Array.isArray(data.actions) && data.actions.length > 0;
+
+      if(hasText){
+        appendBubble(formatAIMarkdown(data.answer), 'ai', true);
+      }
+      if(hasActions){
+        // Executes directly — no confirmation step, per how this app is configured.
+        const lines = applyAIActions(data.actions);
+        const escaped = lines.map(l => l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+        appendBubble('<div class="ai-action-log">'+escaped.map(l=>'<div>'+l+'</div>').join('')+'</div>', 'ai', true);
+        renderAll(true);
+      }
+      if(!hasText && !hasActions){
+        appendBubble('(empty response)', 'ai');
+      }
     } catch(err){
       typing.remove();
       appendBubble('Could not reach '+cfg.backendUrl+'. Is your backend running?', 'ai');
@@ -1459,17 +1470,26 @@
   });
 
   /* ---------- interactions ---------- */
+  // Shared by the manual tap handler AND the AI's mark_habit tool call, so both
+  // paths apply XP/level exactly the same way. Returns false if there was
+  // nothing to change (already in the requested state).
+  function applyHabitCompletion(h, done){
+    const already = todayState(h)==='done';
+    if(already === done) return false;
+    setToday(h, done);
+    xp += done ? h.xp : -h.xp;
+    xpToday += done ? h.xp : -h.xp;
+    if(xp >= xpReq(level)){ xp -= xpReq(level); level += 1; }
+    if(xp < 0 && level>1){ level -=1; xp += xpReq(level); }
+    return true;
+  }
+
   window.toggleHabit = function(evt, id){
     evt.stopPropagation();
     const h = HABITS.find(x=>x.id===id);
     const nowDone = todayState(h)!=='done';
-    setToday(h, nowDone);
-    xp += nowDone ? h.xp : -h.xp;
-    xpToday += nowDone ? h.xp : -h.xp;
-    if(xp >= xpReq(level)){ xp -= xpReq(level); level += 1; }
-    if(xp < 0 && level>1){ level -=1; xp += xpReq(level); }
-
-    if(nowDone){
+    const changed = applyHabitCompletion(h, nowDone);
+    if(changed && nowDone){
       const toast = document.createElement('div');
       toast.className = 'xp-toast';
       toast.textContent = '+'+h.xp+' XP';
@@ -1481,6 +1501,89 @@
     }
     renderAll(true);
   };
+
+  /* ---------- AI tool execution ---------- */
+  // Fuzzy name match: exact match first, then case-insensitive substring
+  // either direction, so "workout" matches "WORKOUT" and "study" matches
+  // "STUDY 60M". Returns null (not undefined) when nothing is close enough —
+  // callers must handle that explicitly rather than silently no-op.
+  function fuzzyFind(list, name){
+    if(!name) return null;
+    const q = String(name).trim().toLowerCase();
+    if(!q) return null;
+    let hit = list.find(x => x.name.toLowerCase() === q);
+    if(hit) return hit;
+    hit = list.find(x => x.name.toLowerCase().includes(q) || q.includes(x.name.toLowerCase()));
+    return hit || null;
+  }
+
+  function slugify(name){
+    return String(name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || ('habit-'+Date.now());
+  }
+
+  // Each handler returns a short plain-text confirmation string (or null to
+  // signal failure — the caller turns that into a visible "couldn't do that"
+  // bubble rather than pretending it worked).
+  const AI_ACTIONS = {
+    mark_habit(args){
+      const h = fuzzyFind(HABITS, args.habit);
+      if(!h) return null;
+      const done = !!args.done;
+      const changed = applyHabitCompletion(h, done);
+      if(!changed) return h.name+' was already '+(done?'done':'not done')+' today — no change made.';
+      return done
+        ? '✓ Marked '+h.name+' as done (+'+h.xp+' XP).'
+        : '☐ Marked '+h.name+' as not done ('+h.xp+' XP removed).';
+    },
+    create_habit(args){
+      const name = String(args.name || '').trim().toUpperCase();
+      if(!name) return null;
+      if(fuzzyFind(HABITS, name)) return name+' already exists — nothing created.';
+      const xpVal = Number.isFinite(args.xp) ? Math.max(5, Math.min(30, Math.round(args.xp))) : 10;
+      HABITS.push({
+        id: slugify(name), name, sub: (args.sub||'DAILY').toUpperCase(), xp: xpVal,
+        history: Array(HIST_DAYS).fill('empty'), // honest: a brand-new habit has no track record to fabricate
+      });
+      return '+ Created habit '+name+' ('+xpVal+' XP, not yet completed today).';
+    },
+    create_goal(args){
+      const name = String(args.name || '').trim().toUpperCase();
+      if(!name) return null;
+      if(fuzzyFind(GOALS, name)) return name+' already exists — nothing created.';
+      const deadline = /^\d{4}-\d{2}-\d{2}$/.test(args.deadline||'') ? args.deadline : null;
+      if(!deadline) return null;
+      GOALS.push({
+        id: 'g'+Date.now(), name, pct: 0, deadline, weekDelta: 0,
+        habits: [], habitOverrides: {}, extraHabits: [],
+        milestones: [{text:'Define first milestone', done:false}],
+        history: Array.from({length:30},()=>0),
+        contrib: [0,0,0,0,0,0,0],
+      });
+      return '+ Created goal '+name+' (deadline '+deadline+').';
+    },
+    update_goal_progress(args){
+      const g = fuzzyFind(GOALS, args.goal);
+      if(!g) return null;
+      const pct = Number.isFinite(args.pct) ? Math.max(0, Math.min(100, args.pct)) : null;
+      if(pct === null) return null;
+      const delta = pct - g.pct;
+      g.pct = Math.round(pct*10)/10;
+      g.weekDelta = Math.round(delta*10)/10;
+      return '↻ Updated '+g.name+' to '+g.pct+'% ('+(delta>=0?'+':'')+g.weekDelta+'%).';
+    },
+  };
+
+  /** Executes every action Gemini asked for; returns an array of confirmation lines. */
+  function applyAIActions(actions){
+    const lines = [];
+    for(const action of (actions||[])){
+      const handler = AI_ACTIONS[action.name];
+      if(!handler){ lines.push('Unknown action requested: '+action.name); continue; }
+      const result = handler(action.arguments || {});
+      lines.push(result || ('Couldn\'t complete "'+action.name+'" — target not found in your data.'));
+    }
+    return lines;
+  }
 
   window.goTab = function(name){
     document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active', s.dataset.screen===name));
