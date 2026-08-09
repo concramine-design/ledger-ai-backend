@@ -1,0 +1,1481 @@
+<style>
+  :root{
+    --bg:#050505;
+    --bg-elevated:#0D0D0D;
+    --card:#111111;
+    --card-raised:#141414;
+    --border:#242424;
+    --border-soft:rgba(255,255,255,0.055);
+    --text:#F5F5F5;
+    --text-secondary:#8A8A8A;
+    --text-muted:#5A5A5A;
+    --positive:#35D07F;
+    --positive-dim:rgba(53,208,127,0.14);
+    --negative:#FF5C5C;
+    --negative-dim:rgba(255,92,92,0.14);
+    --accent:#4C8DFF;
+    --accent-dim:rgba(76,141,255,0.14);
+    --font-display:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;
+    --font-mono:ui-monospace,"SF Mono","Cascadia Mono","Roboto Mono",Consolas,monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:radial-gradient(120% 100% at 50% 0%,#0c0c0c 0%,#020202 60%,#000 100%);
+    min-height:100dvh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:28px 12px;
+    font-family:var(--font-display);
+    color:var(--text);
+  }
+  ::selection{background:var(--accent-dim);color:var(--text);}
+  button,input{font-family:inherit;}
+  .studio-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;}
+  .studio-caption{
+    font-family:var(--font-mono);
+    font-size:10.5px;
+    letter-spacing:.14em;
+    color:var(--text-muted);
+    text-transform:uppercase;
+    text-align:center;
+    max-width:380px;
+  }
+
+  /* ===== Phone shell ===== */
+  .device{
+    position:relative;
+    width:390px;
+    height:844px;
+    max-height:92dvh;
+    background:#000;
+    border-radius:46px;
+    padding:12px;
+    box-shadow:0 0 0 1.5px #1c1c1c, 0 40px 80px -20px rgba(0,0,0,0.9), 0 0 60px -10px rgba(76,141,255,0.06);
+    flex-shrink:0;
+  }
+  .screen-inner{
+    position:relative;
+    width:100%;
+    height:100%;
+    background:var(--bg);
+    border-radius:36px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    border:1px solid #151515;
+  }
+  .notch{
+    position:absolute;
+    top:0;left:50%;transform:translateX(-50%);
+    width:120px;height:26px;
+    background:#000;
+    border-radius:0 0 16px 16px;
+    z-index:50;
+  }
+  .status-row{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:16px 26px 4px;
+    font-family:var(--font-mono);
+    font-size:13px;
+    font-weight:600;
+    letter-spacing:.02em;
+    flex-shrink:0;
+    color:var(--text);
+  }
+  .status-icons{display:flex;align-items:center;gap:5px;}
+  .status-icons svg{display:block;}
+
+  @media (max-width:480px){
+    body{padding:0;align-items:stretch;}
+    .studio-wrap{gap:0;}
+    .studio-caption{display:none;}
+    .device{width:100%;height:100dvh;max-height:none;border-radius:0;padding:0;box-shadow:none;}
+    .screen-inner{border-radius:0;border:none;}
+    .notch{display:none;}
+  }
+
+  /* ===== Nav ===== */
+  .app-body{flex:1;min-height:0;position:relative;}
+  .screen{
+    position:absolute;inset:0;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:6px 18px 100px;
+    opacity:0;
+    pointer-events:none;
+    transform:translateY(6px);
+    transition:opacity .18s ease, transform .18s ease;
+  }
+  .screen.active{opacity:1;pointer-events:auto;transform:translateY(0);}
+  .screen::-webkit-scrollbar{width:0;}
+
+  .navbar{
+    position:absolute;bottom:0;left:0;right:0;
+    display:flex;
+    background:rgba(8,8,8,0.92);
+    backdrop-filter:blur(14px);
+    border-top:1px solid var(--border);
+    padding:10px 6px calc(env(safe-area-inset-bottom,0px) + 10px);
+    z-index:40;
+  }
+  .nav-item{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;
+    background:none;border:none;color:var(--text-muted);
+    padding:4px 0;cursor:pointer;
+  }
+  .nav-item svg{width:20px;height:20px;}
+  .nav-item span{font-size:9.5px;letter-spacing:.09em;font-weight:600;text-transform:uppercase;font-family:var(--font-mono);}
+  .nav-item.active{color:var(--text);}
+  .nav-item .dot{width:3px;height:3px;border-radius:50%;background:var(--accent);margin-top:-2px;opacity:0;}
+  .nav-item.active .dot{opacity:1;}
+
+  /* ===== Typography helpers ===== */
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:10.5px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--text-muted);
+    font-weight:600;
+  }
+  .label-sec{
+    font-family:var(--font-mono);
+    font-size:10px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--text-secondary);
+  }
+  .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums;}
+  .num-huge{
+    font-family:var(--font-mono);
+    font-weight:600;
+    font-size:46px;
+    line-height:1;
+    letter-spacing:-.01em;
+    font-variant-numeric:tabular-nums;
+  }
+  .delta{
+    display:inline-flex;align-items:center;gap:3px;
+    font-family:var(--font-mono);font-size:12px;font-weight:600;
+    padding:2px 7px;border-radius:5px;
+  }
+  .delta.pos{color:var(--positive);background:var(--positive-dim);}
+  .delta.neg{color:var(--negative);background:var(--negative-dim);}
+  .delta.flat{color:var(--text-secondary);background:rgba(255,255,255,0.05);}
+
+  /* ===== Cards ===== */
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:16px;
+  }
+  .card + .card{margin-top:10px;}
+  .section{margin-top:22px;}
+  .section-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;}
+  .section-head .see-all{font-family:var(--font-mono);font-size:10.5px;color:var(--text-muted);letter-spacing:.06em;background:none;border:none;cursor:pointer;}
+
+  hr.rule{border:none;border-top:1px solid var(--border-soft);margin:10px 0;}
+
+  /* ===== Header (per screen) ===== */
+  .topbar{padding:14px 0 4px;display:flex;align-items:flex-start;justify-content:space-between;}
+  .topbar h1{font-size:19px;font-weight:700;margin:2px 0 0;letter-spacing:-.01em;}
+  .wordmark{font-family:var(--font-mono);font-size:11px;letter-spacing:.22em;color:var(--text-muted);}
+
+  .badge-xp{
+    font-family:var(--font-mono);font-size:11px;font-weight:700;
+    color:#0a0a0a;background:var(--positive);
+    padding:6px 10px;border-radius:20px;letter-spacing:.02em;
+    white-space:nowrap;
+  }
+
+  /* ===== Progress bars ===== */
+  .bar{height:6px;border-radius:4px;background:#1c1c1c;overflow:hidden;position:relative;}
+  .bar-fill{height:100%;border-radius:4px;transition:width .5s cubic-bezier(.2,.8,.2,1);}
+  .bar-fill.accent{background:var(--accent);}
+  .bar-fill.positive{background:var(--positive);}
+  .bar.thin{height:4px;}
+
+  /* ===== Habit rows (Today's habits) ===== */
+  .habit-row{
+    display:flex;align-items:center;gap:12px;
+    padding:11px 2px;
+    border-bottom:1px solid var(--border-soft);
+  }
+  .habit-row:last-child{border-bottom:none;}
+  .check{
+    width:21px;height:21px;flex-shrink:0;border-radius:5px;
+    border:1.5px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    background:#0c0c0c;
+    cursor:pointer;
+    transition:background .15s ease, border-color .15s ease, transform .12s ease;
+  }
+  .check svg{width:13px;height:13px;opacity:0;transform:scale(.5);transition:opacity .15s ease, transform .15s ease;}
+  .check.done{background:var(--positive);border-color:var(--positive);}
+  .check.done svg{opacity:1;transform:scale(1);stroke:#062015;}
+  .check:active{transform:scale(.92);}
+  .habit-main{flex:1;min-width:0;}
+  .habit-name{font-size:14px;font-weight:600;}
+  .habit-name.done{color:var(--text-secondary);}
+  .habit-sub{font-family:var(--font-mono);font-size:10.5px;color:var(--text-muted);margin-top:1px;}
+  .habit-xp{font-family:var(--font-mono);font-size:12px;color:var(--text-muted);font-weight:600;flex-shrink:0;}
+  .habit-xp.done{color:var(--positive);}
+
+  /* ===== XP toast ===== */
+  .xp-toast{
+    position:fixed;
+    font-family:var(--font-mono);font-weight:700;font-size:13px;
+    color:var(--positive);
+    pointer-events:none;
+    z-index:200;
+    animation:floatUp .8s ease forwards;
+  }
+  @keyframes floatUp{
+    0%{opacity:0;transform:translateY(4px);}
+    15%{opacity:1;transform:translateY(-2px);}
+    100%{opacity:0;transform:translateY(-30px);}
+  }
+
+  /* ===== Habit grid (Habits screen) ===== */
+  .grid-scroll{overflow-x:auto;margin:0 -18px;padding:0 18px 4px;}
+  .grid-table{border-collapse:collapse;}
+  .grid-table th{
+    font-family:var(--font-mono);font-size:9.5px;color:var(--text-muted);
+    font-weight:600;letter-spacing:.04em;
+    padding:0 0 8px;text-align:center;width:26px;
+  }
+  .grid-table th.today-col{color:var(--accent);}
+  .grid-table td{padding:2px 3px;text-align:center;}
+  .grid-table td.rowlabel{
+    text-align:left;padding:0 10px 0 0;position:sticky;left:0;
+    background:var(--bg);
+  }
+  .grid-habit-name{font-size:12.5px;font-weight:600;white-space:nowrap;cursor:pointer;}
+  .grid-habit-sub{font-family:var(--font-mono);font-size:9px;color:var(--text-muted);white-space:nowrap;}
+  .cell{
+    width:20px;height:20px;border-radius:4px;
+    display:inline-block;
+    background:#141414;
+    border:1px solid var(--border);
+  }
+  .cell.done{background:var(--positive);border-color:var(--positive);}
+  .cell.partial{background:var(--accent-dim);border-color:var(--accent);}
+  .cell.today{box-shadow:0 0 0 1.5px var(--accent);}
+  .cell.future{background:transparent;border:1px dashed #1c1c1c;}
+
+  /* ===== Chips ===== */
+  .chip-row{display:flex;gap:8px;overflow-x:auto;padding:2px 0 2px;margin:0 -2px 4px;}
+  .chip{
+    font-family:var(--font-mono);font-size:10.5px;font-weight:600;letter-spacing:.04em;
+    padding:7px 12px;border-radius:16px;border:1px solid var(--border);
+    background:var(--card);color:var(--text-secondary);
+    white-space:nowrap;cursor:pointer;flex-shrink:0;
+  }
+  .chip.active{background:var(--text);color:#0a0a0a;border-color:var(--text);}
+
+  /* ===== Charts ===== */
+  .chart-svg{width:100%;height:auto;display:block;}
+  .chart-xlabels{display:flex;justify-content:space-between;margin-top:2px;padding:0 8px;}
+  .chart-xlabels span{font-family:var(--font-mono);font-size:9px;color:var(--text-muted);}
+  .weekday-labels{display:flex;justify-content:space-between;padding:0 8px;margin-top:4px;}
+  .weekday-labels span{font-family:var(--font-mono);font-size:9.5px;color:var(--text-muted);flex:1;text-align:center;}
+
+  /* ===== Goal / portfolio cards ===== */
+  .goal-card{cursor:pointer;}
+  .goal-top{display:flex;justify-content:space-between;align-items:flex-start;}
+  .goal-name{font-size:13.5px;font-weight:700;letter-spacing:.01em;}
+  .goal-pct{font-family:var(--font-mono);font-size:26px;font-weight:600;margin:6px 0 8px;}
+  .goal-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;}
+  .assoc-habit{display:flex;justify-content:space-between;font-size:11.5px;padding:5px 0;color:var(--text-secondary);}
+  .assoc-habit span:last-child{font-family:var(--font-mono);color:var(--text);font-weight:600;}
+
+  /* ===== Overlay (detail screens) ===== */
+  .overlay{
+    position:absolute;inset:0;background:var(--bg);
+    transform:translateX(100%);
+    transition:transform .26s cubic-bezier(.2,.8,.2,1);
+    overflow-y:auto;padding:0 18px 100px;
+    z-index:30;
+  }
+  .overlay.open{transform:translateX(0);}
+  .overlay-head{display:flex;align-items:center;gap:10px;padding:16px 0 6px;}
+  .back-btn{
+    width:30px;height:30px;border-radius:8px;background:var(--card);border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text);flex-shrink:0;
+  }
+  .stat-mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .stat-mini{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;}
+  .stat-mini .v{font-family:var(--font-mono);font-size:19px;font-weight:600;margin-top:4px;}
+
+  .milestone-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border-soft);}
+  .milestone-row:last-child{border-bottom:none;}
+  .milestone-box{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .milestone-box svg{width:10px;height:10px;opacity:0;}
+  .milestone-box.done{background:var(--positive);border-color:var(--positive);}
+  .milestone-box.done svg{opacity:1;stroke:#062015;}
+  .milestone-text{font-size:13px;flex:1;}
+  .milestone-text.done{color:var(--text-secondary);text-decoration:line-through;text-decoration-color:var(--border);}
+
+  .contrib-row{display:flex;justify-content:space-between;padding:7px 0;font-family:var(--font-mono);font-size:12px;border-bottom:1px solid var(--border-soft);}
+  .contrib-row:last-child{border-bottom:none;}
+  .contrib-row .day{color:var(--text-muted);}
+
+  /* ===== Heatmap ===== */
+  .heatmap{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+  .heat-cell{aspect-ratio:1;border-radius:3px;background:#141414;border:1px solid var(--border);}
+  .heat-cell.done{background:var(--positive);border-color:var(--positive);}
+  .heat-cell.partial{background:rgba(76,141,255,.55);border-color:var(--accent);}
+
+  /* ===== Reward track ===== */
+  .reward-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border-soft);}
+  .reward-row:last-child{border-bottom:none;}
+  .reward-xp{font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--text-secondary);}
+  .reward-status{display:flex;align-items:center;gap:6px;}
+  .reward-status svg{width:14px;height:14px;}
+  .reward-status.unlocked{color:var(--positive);}
+  .reward-status.locked{color:var(--text-muted);}
+  .custom-reward{background:var(--card-raised);border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:8px;}
+
+  /* ===== AI chat ===== */
+  .chat-scroll{display:flex;flex-direction:column;gap:10px;padding:6px 0 14px;}
+  .bubble{max-width:82%;padding:10px 13px;border-radius:12px;font-size:13px;line-height:1.5;}
+  .bubble.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:3px;}
+  .bubble.ai{align-self:flex-start;background:var(--card);border:1px solid var(--border);border-bottom-left-radius:3px;}
+  .bubble.ai .stat-line{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:12px;margin-top:2px;padding:3px 0;}
+  .bubble.ai .stat-line b{font-weight:700;}
+  .suggest-row{display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;}
+  .suggest-chip{
+    font-size:11.5px;font-family:var(--font-mono);color:var(--text-secondary);
+    border:1px solid var(--border);background:var(--card);border-radius:14px;
+    padding:8px 12px;white-space:nowrap;cursor:pointer;flex-shrink:0;
+  }
+  .chat-input-row{display:flex;gap:8px;align-items:center;padding:10px 0 4px;position:sticky;bottom:0;background:linear-gradient(0deg,var(--bg) 60%,transparent);}
+  .chat-input{
+    flex:1;background:var(--card);border:1px solid var(--border);border-radius:20px;
+    padding:11px 15px;color:var(--text);font-size:13px;outline:none;
+  }
+  .chat-input:focus{border-color:var(--accent);}
+  .send-btn{
+    width:38px;height:38px;border-radius:50%;background:var(--accent);border:none;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;
+  }
+  .typing{display:flex;gap:3px;padding:4px 2px;}
+  .typing span{width:5px;height:5px;border-radius:50%;background:var(--text-muted);animation:blink 1s infinite ease-in-out;}
+  .typing span:nth-child(2){animation-delay:.15s;}
+  .typing span:nth-child(3){animation-delay:.3s;}
+  @keyframes blink{0%,80%,100%{opacity:.25;}40%{opacity:1;}}
+
+  .insight-card{cursor:pointer;}
+  .insight-tag{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;color:var(--accent);font-weight:700;}
+  .insight-tag.warn{color:var(--negative);}
+  .insight-tag.good{color:var(--positive);}
+  .insight-headline{font-size:14px;font-weight:700;margin:6px 0 3px;}
+  .insight-compare{display:flex;align-items:center;gap:10px;margin-top:8px;font-family:var(--font-mono);}
+  .insight-compare .v{font-size:20px;font-weight:600;}
+  .insight-compare .arrow{color:var(--text-muted);font-size:14px;}
+  .insight-detail{max-height:0;overflow:hidden;transition:max-height .25s ease;}
+  .insight-detail.open{max-height:160px;}
+  .insight-detail p{font-size:12px;color:var(--text-secondary);line-height:1.6;margin:8px 0 0;padding-top:8px;border-top:1px solid var(--border-soft);}
+
+  .planner-row{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-soft);}
+  .planner-row:last-child{border-bottom:none;}
+  .planner-time{font-family:var(--font-mono);font-size:11.5px;color:var(--text-muted);width:44px;flex-shrink:0;padding-top:1px;}
+  .planner-main{flex:1;}
+  .planner-title{font-size:13px;font-weight:600;}
+  .planner-sub{font-family:var(--font-mono);font-size:10.5px;color:var(--text-muted);}
+  .planner-xp{font-family:var(--font-mono);font-size:12px;color:var(--positive);font-weight:700;white-space:nowrap;}
+
+  .generate-btn{
+    width:100%;padding:13px;border-radius:10px;border:1px solid var(--accent);
+    background:var(--accent-dim);color:var(--accent);font-weight:700;font-size:12.5px;
+    letter-spacing:.06em;font-family:var(--font-mono);cursor:pointer;margin-top:4px;
+  }
+  .generate-btn:active{transform:scale(.99);}
+
+  .add-goal-btn{
+    width:100%;padding:12px;border-radius:10px;border:1px dashed var(--border);
+    background:none;color:var(--text-secondary);font-size:12.5px;font-weight:600;
+    cursor:pointer;margin-top:12px;
+  }
+  .add-goal-form{display:none;flex-direction:column;gap:8px;margin-top:12px;}
+  .add-goal-form.open{display:flex;}
+  .add-goal-form input{
+    background:var(--card);border:1px solid var(--border);border-radius:8px;
+    padding:10px 12px;color:var(--text);font-size:13px;outline:none;
+  }
+  .add-goal-form input:focus{border-color:var(--accent);}
+  .add-goal-form button{
+    padding:11px;border-radius:8px;border:none;background:var(--text);color:#0a0a0a;
+    font-weight:700;font-size:12.5px;cursor:pointer;
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:.001ms !important;transition-duration:.001ms !important;}
+  }
+
+  /* ===== AI connection (settings modal) ===== */
+  .icon-btn{
+    width:30px;height:30px;border-radius:8px;background:var(--card);border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-secondary);
+    flex-shrink:0;margin-top:2px;
+  }
+  .icon-btn:active{transform:scale(.94);}
+  .ai-conn-row{display:flex;align-items:center;gap:8px;padding:0 0 14px;}
+  .ai-conn-dot{width:7px;height:7px;border-radius:50%;background:var(--text-muted);flex-shrink:0;}
+  .ai-conn-dot.on{background:var(--positive);box-shadow:0 0 0 3px var(--positive-dim);}
+  .ai-conn-link{margin-left:auto;font-family:var(--font-mono);font-size:10.5px;font-weight:700;letter-spacing:.05em;color:var(--accent);background:none;border:none;cursor:pointer;}
+
+  .modal-backdrop{
+    position:absolute;inset:0;background:rgba(0,0,0,0.65);z-index:70;
+    display:none;align-items:center;justify-content:center;padding:22px;
+  }
+  .modal-backdrop.open{display:flex;}
+  .modal-box{background:var(--card-raised);border:1px solid var(--border);border-radius:14px;padding:20px;width:100%;max-width:300px;}
+  .modal-box h2{font-size:15px;margin:0 0 4px;font-weight:700;}
+  .modal-box p.hint{font-size:11.5px;color:var(--text-secondary);margin:0 0 16px;line-height:1.55;}
+  .modal-field{margin-bottom:12px;}
+  .modal-field label{display:block;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.08em;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;}
+  .modal-field input{
+    width:100%;background:#0b0b0b;border:1px solid var(--border);border-radius:8px;
+    padding:10px 12px;color:var(--text);font-size:12.5px;outline:none;font-family:var(--font-mono);
+  }
+  .modal-field input:focus{border-color:var(--accent);}
+  .modal-actions{display:flex;gap:8px;margin-top:16px;}
+  .modal-actions button{
+    flex:1;padding:11px;border-radius:8px;border:1px solid transparent;font-weight:700;
+    font-size:11.5px;cursor:pointer;font-family:var(--font-mono);letter-spacing:.03em;
+  }
+  .modal-btn-save{background:var(--text);color:#0a0a0a;}
+  .modal-btn-cancel{background:var(--card);color:var(--text-secondary);border-color:var(--border);}
+  .modal-btn-disconnect{background:var(--negative-dim);color:var(--negative);border-color:transparent;margin-top:8px;width:100%;}
+</style>
+
+<div class="studio-wrap">
+  <div class="device">
+    <div class="notch"></div>
+    <div class="screen-inner">
+      <div class="status-row">
+        <span id="statusTime" class="mono">9:41</span>
+        <div class="status-icons">
+          <svg width="17" height="11" viewBox="0 0 17 11" fill="none"><rect x="0" y="6" width="3" height="5" rx="0.5" fill="#F5F5F5"/><rect x="4.5" y="4" width="3" height="7" rx="0.5" fill="#F5F5F5"/><rect x="9" y="2" width="3" height="9" rx="0.5" fill="#F5F5F5"/><rect x="13.5" y="0" width="3" height="11" rx="0.5" fill="#F5F5F5"/></svg>
+          <svg width="19" height="11" viewBox="0 0 19 11" fill="none"><rect x="0.5" y="0.5" width="16" height="10" rx="2.5" stroke="#F5F5F5"/><rect x="2" y="2" width="12" height="7" rx="1.2" fill="#35D07F"/><rect x="17.2" y="3.3" width="1.3" height="4.4" rx="0.6" fill="#F5F5F5"/></svg>
+        </div>
+      </div>
+
+      <div class="app-body" id="appBody">
+
+        <!-- ============ HOME ============ -->
+        <section class="screen active" data-screen="home">
+          <div class="topbar">
+            <div>
+              <div class="eyebrow" id="greeting">GOOD MORNING</div>
+              <h1 id="dateLine">—</h1>
+            </div>
+            <div class="badge-xp" id="xpTodayBadge">+0 XP TODAY</div>
+          </div>
+
+          <div class="card" style="margin-top:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span class="label-sec">LEVEL <span id="lvlNum">12</span></span>
+              <span class="mono" style="font-size:11px;color:var(--text-secondary);"><span id="xpCur">1,840</span> / <span id="xpReq">2,000</span> XP</span>
+            </div>
+            <div class="bar" style="margin-top:9px;"><div class="bar-fill accent" id="xpBar" style="width:0%;"></div></div>
+            <div class="label-sec" style="margin-top:7px;color:var(--text-muted);">+<span id="xpToNext">160</span> XP TO LEVEL <span id="lvlNext">13</span></div>
+          </div>
+
+          <div class="card">
+            <div class="eyebrow">TODAY</div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:6px;">
+              <div>
+                <div class="num-huge" id="todayPct">78.4%</div>
+                <div class="label-sec" style="margin-top:5px;">DAILY COMPLETION</div>
+                <span class="delta pos" id="todayDelta" style="margin-top:8px;">+12.4% VS YESTERDAY</span>
+              </div>
+              <div style="width:104px;" id="todaySpark"></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <span class="eyebrow">TODAY'S HABITS</span>
+              <span class="mono label-sec" id="habitDoneCount">0/5</span>
+            </div>
+            <div class="card" id="todayHabitList" style="padding:4px 12px;"></div>
+          </div>
+
+          <div class="section">
+            <div class="section-head"><span class="eyebrow">WEEKLY PERFORMANCE</span></div>
+            <div class="card">
+              <div style="display:flex;align-items:baseline;gap:8px;">
+                <span class="num-huge" style="font-size:28px;" id="weekPct">82%</span>
+                <span class="delta pos" id="weekDelta">+3.1%</span>
+              </div>
+              <div id="weekChart" style="margin-top:8px;"></div>
+              <div class="weekday-labels"><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span><span>SUN</span></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head">
+              <span class="eyebrow">GOALS</span>
+              <button class="see-all" onclick="goTab('goals')">VIEW ALL →</button>
+            </div>
+            <div class="card" id="homeGoalsList" style="padding:4px 14px;"></div>
+          </div>
+
+          <div class="section">
+            <div class="eyebrow" style="margin-bottom:8px;">AI INSIGHT</div>
+            <div class="card" style="border-color:var(--accent);background:linear-gradient(180deg,rgba(76,141,255,0.08),transparent);cursor:pointer;" onclick="goTab('ai')">
+              <div style="display:flex;gap:10px;align-items:flex-start;">
+                <svg width="15" height="15" style="flex-shrink:0;margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="#4C8DFF" stroke-width="1.8"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19" stroke-linecap="round"/></svg>
+                <p style="margin:0;font-size:13px;line-height:1.55;color:var(--text);">"Your study consistency increased <b style="color:var(--positive);">18%</b> this week. Sessions logged before 12:00 finish at a much higher rate."</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ HABITS ============ -->
+        <section class="screen" data-screen="habits">
+          <div class="topbar"><div><div class="eyebrow">GRID</div><h1>Habits</h1></div></div>
+
+          <div class="grid-scroll">
+            <table class="grid-table" id="habitGridTable"></table>
+          </div>
+
+          <div class="section">
+            <div class="card">
+              <div class="eyebrow">WEEKLY DONE</div>
+              <div class="num-huge" style="font-size:30px;margin-top:4px;" id="gridWeekPct">82%</div>
+              <div class="bar" style="margin-top:10px;"><div class="bar-fill positive" id="gridWeekBar" style="width:0%;"></div></div>
+              <div class="label-sec" style="margin-top:7px;"><span id="gridWeekFrac">42 / 51</span> HABITS COMPLETED</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head"><span class="eyebrow">DAY BREAKDOWN</span></div>
+            <div class="card" id="dayBreakdown"></div>
+          </div>
+        </section>
+
+        <!-- ============ GOALS ============ -->
+        <section class="screen" data-screen="goals">
+          <div class="topbar"><div><div class="eyebrow">PORTFOLIO</div><h1>Goals</h1></div></div>
+          <div id="goalsList" style="margin-top:8px;"></div>
+          <button class="add-goal-btn" id="addGoalToggle">+ NEW GOAL</button>
+          <div class="add-goal-form" id="addGoalForm">
+            <input type="text" id="newGoalName" placeholder="GOAL NAME" maxlength="40">
+            <input type="date" id="newGoalDate">
+            <button id="newGoalSubmit">CREATE GOAL</button>
+          </div>
+        </section>
+
+        <!-- ============ ANALYTICS ============ -->
+        <section class="screen" data-screen="analytics">
+          <div class="topbar"><div><div class="eyebrow">TERMINAL</div><h1>Analytics</h1></div></div>
+
+          <div class="chip-row" id="metricChips"></div>
+          <div class="card">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span class="num-huge" style="font-size:26px;" id="monthlyHead">78.4%</span>
+              <span class="delta pos" id="monthlyDelta">+6.2%</span>
+            </div>
+            <div class="label-sec" style="margin-top:2px;" id="monthlyLabel">MONTHLY COMPLETION</div>
+            <div id="monthlyChart" style="margin-top:10px;"></div>
+            <div class="chart-xlabels"><span>1</span><span>5</span><span>10</span><span>15</span><span>20</span><span>25</span><span>30</span></div>
+          </div>
+
+          <div class="section">
+            <div class="section-head"><span class="eyebrow">STREAKS</span></div>
+            <div id="streakGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+          </div>
+
+          <div class="section">
+            <div class="section-head"><span class="eyebrow">HABIT HEATMAP</span></div>
+            <div class="chip-row" id="heatmapChips"></div>
+            <div class="card">
+              <div class="stat-mini-grid" style="margin-bottom:14px;">
+                <div class="stat-mini"><div class="label-sec">CURRENT STREAK</div><div class="v" id="heatStreak">—</div></div>
+                <div class="stat-mini"><div class="label-sec">BEST STREAK</div><div class="v" id="heatBest">—</div></div>
+                <div class="stat-mini"><div class="label-sec">COMPLETION</div><div class="v" id="heatCompletion">—</div></div>
+                <div class="stat-mini"><div class="label-sec">THIS WEEK</div><div class="v" id="heatWeek">—</div></div>
+              </div>
+              <div class="heatmap" id="heatmapGrid"></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head"><span class="eyebrow">REWARD TRACK</span></div>
+            <div class="card">
+              <div class="label-sec" style="margin-bottom:2px;">LIFETIME XP</div>
+              <div class="num-huge" style="font-size:22px;" id="lifetimeXp">3,840</div>
+              <div id="rewardTiers" style="margin-top:10px;"></div>
+              <div class="eyebrow" style="margin-top:14px;">PERSONAL REWARDS</div>
+              <div id="customRewards"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ AI ============ -->
+        <section class="screen" data-screen="ai">
+          <div class="topbar">
+            <div><div class="eyebrow">ANALYST</div><h1>AI Assistant</h1></div>
+            <button class="icon-btn" onclick="openAISettings()" title="Connect API key">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+            </button>
+          </div>
+
+          <div class="section" style="margin-top:6px;">
+            <div class="eyebrow" style="margin-bottom:8px;">INSIGHTS</div>
+
+            <div class="card insight-card" onclick="toggleInsight(this)">
+              <div class="insight-tag">PATTERN DETECTED</div>
+              <div class="insight-headline">STUDY</div>
+              <div class="insight-compare">
+                <span class="v" style="color:var(--positive);">91%</span>
+                <span class="label-sec" style="color:var(--text-muted);">before 12:00</span>
+                <span class="arrow">vs</span>
+                <span class="v" style="color:var(--text-secondary);">64%</span>
+                <span class="label-sec" style="color:var(--text-muted);">after 18:00</span>
+              </div>
+              <div class="insight-detail"><p>Sessions started in the morning finish at a much higher rate. Scheduling STUDY before noon on 12 of the last 14 days correlated with same-day completion.</p></div>
+            </div>
+
+            <div class="card insight-card" onclick="toggleInsight(this)">
+              <div class="insight-tag good">CONSISTENCY</div>
+              <div class="insight-headline">READING has improved</div>
+              <div style="display:flex;align-items:baseline;gap:8px;margin-top:6px;">
+                <span class="num-huge" style="font-size:24px;color:var(--positive);">+24%</span>
+                <span class="label-sec">OVER LAST 30 DAYS</span>
+              </div>
+              <div class="insight-detail"><p>READ 20P completion rose from 64% to 88% across the last 30 days, with zero misses in the last 9 days — your longest run this quarter.</p></div>
+            </div>
+
+            <div class="card insight-card" onclick="toggleInsight(this)">
+              <div class="insight-tag warn">WEAK POINT</div>
+              <div class="insight-headline">WORKOUT completion dropped</div>
+              <div class="insight-compare">
+                <span class="v" style="color:var(--text-secondary);">84%</span>
+                <span class="arrow">→</span>
+                <span class="v" style="color:var(--negative);">61%</span>
+              </div>
+              <div class="insight-detail"><p>Four of the last six missed sessions fell on days with 6+ scheduled tasks. Consider moving WORKOUT earlier on high-load days.</p></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="eyebrow" style="margin-bottom:8px;">DAILY PLANNER</div>
+            <div class="card">
+              <div id="plannerBody">
+                <p style="font-size:12.5px;color:var(--text-secondary);margin:2px 0 0;line-height:1.6;">The AI can build an optimized schedule from your goal priorities, habit frequency, deadlines and past completion behavior.</p>
+                <button class="generate-btn" id="genPlanBtn">GENERATE TODAY'S PLAN</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="eyebrow" style="margin-bottom:8px;">ASK THE ANALYST</div>
+            <div class="card">
+              <div class="ai-conn-row">
+                <span class="ai-conn-dot" id="aiConnDot"></span>
+                <span class="label-sec" id="aiConnText">NOT CONNECTED — REPLIES BELOW ARE A STATIC DEMO</span>
+                <button class="ai-conn-link" id="aiConnLink" onclick="openAISettings()">CONNECT</button>
+              </div>
+              <div class="chat-scroll" id="chatScroll">
+                <div class="bubble user">Why was my productivity lower this week?</div>
+                <div class="bubble ai">
+                  Your completion rate fell from <b>86%</b> to <b>72%</b>. The largest change came from:
+                  <div class="stat-line"><span>WORKOUT</span><b style="color:var(--negative);">91% → 58%</b></div>
+                  <div class="stat-line"><span>STUDY</span><b style="color:var(--negative);">94% → 76%</b></div>
+                  <div class="stat-line"><span>READING</span><b style="color:var(--text-secondary);">88% → 83%</b></div>
+                  Study completion was also lower on days scheduled with more than 6 tasks.
+                  <div class="label-sec" style="margin-top:8px;color:var(--text-muted);">(sample reply — connect a backend for live answers)</div>
+                </div>
+              </div>
+              <div class="suggest-row">
+                <button class="suggest-chip" onclick="askAI(this)">What's my best streak right now?</button>
+                <button class="suggest-chip" onclick="askAI(this)">Which goal needs attention?</button>
+                <button class="suggest-chip" onclick="askAI(this)">Plan tomorrow for me</button>
+              </div>
+              <div class="chat-input-row">
+                <input class="chat-input" id="chatInput" placeholder="Ask about your data…">
+                <button class="send-btn" onclick="sendChat()">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z" stroke-linejoin="round" stroke-linecap="round"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ GOAL DETAIL OVERLAY ============ -->
+        <div class="overlay" id="goalOverlay">
+          <div class="overlay-head">
+            <button class="back-btn" onclick="closeOverlay('goalOverlay')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F5F5F5" stroke-width="2.2"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="eyebrow" id="goalDetailTag">GOAL</div>
+          </div>
+          <h1 id="goalDetailName" style="font-size:20px;margin:2px 0 12px;">—</h1>
+          <div class="num-huge" id="goalDetailPct">0%</div>
+          <div class="bar" style="margin-top:10px;"><div class="bar-fill positive" id="goalDetailBar" style="width:0%;"></div></div>
+
+          <div class="stat-mini-grid" style="margin-top:14px;">
+            <div class="stat-mini"><div class="label-sec">TARGET</div><div class="v">100%</div></div>
+            <div class="stat-mini"><div class="label-sec">DEADLINE</div><div class="v mono" style="font-size:14px;" id="goalDetailDeadline">—</div></div>
+          </div>
+
+          <div class="section">
+            <div class="eyebrow" style="margin-bottom:8px;">PROGRESS HISTORY</div>
+            <div class="card" id="goalDetailChart"></div>
+          </div>
+
+          <div class="section">
+            <div class="eyebrow" style="margin-bottom:8px;">MILESTONES</div>
+            <div class="card" id="goalMilestones"></div>
+          </div>
+
+          <div class="section">
+            <div class="eyebrow" style="margin-bottom:8px;">ASSOCIATED HABITS</div>
+            <div class="card" id="goalHabits"></div>
+          </div>
+
+          <div class="section">
+            <div class="eyebrow" style="margin-bottom:8px;">DAILY CONTRIBUTION</div>
+            <div class="card" id="goalContrib"></div>
+          </div>
+        </div>
+
+        <!-- ============ HABIT DETAIL OVERLAY ============ -->
+        <div class="overlay" id="habitOverlay">
+          <div class="overlay-head">
+            <button class="back-btn" onclick="closeOverlay('habitOverlay')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F5F5F5" stroke-width="2.2"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="eyebrow">HABIT</div>
+          </div>
+          <h1 id="habitDetailName" style="font-size:20px;margin:2px 0 14px;">—</h1>
+
+          <div class="stat-mini-grid">
+            <div class="stat-mini"><div class="label-sec">CURRENT STREAK</div><div class="v" id="habitDetailStreak">—</div></div>
+            <div class="stat-mini"><div class="label-sec">BEST STREAK</div><div class="v" id="habitDetailBest">—</div></div>
+            <div class="stat-mini"><div class="label-sec">COMPLETION</div><div class="v" id="habitDetailCompletion">—</div></div>
+            <div class="stat-mini"><div class="label-sec">THIS WEEK</div><div class="v" id="habitDetailWeek">—</div></div>
+          </div>
+
+          <div class="section">
+            <div class="eyebrow" style="margin-bottom:8px;">MONTHLY HISTORY</div>
+            <div class="card"><div class="heatmap" id="habitDetailHeatmap"></div></div>
+          </div>
+        </div>
+
+        <!-- ============ AI SETTINGS MODAL ============ -->
+        <div class="modal-backdrop" id="aiSettingsBackdrop">
+          <div class="modal-box">
+            <h2>Connect AI backend</h2>
+            <p class="hint">Your key is stored only in this browser (localStorage) and sent only to the backend URL below — never anywhere else. It calls your own server, which calls the Claude API.</p>
+            <div class="modal-field">
+              <label>Backend URL</label>
+              <input type="text" id="aiUrlInput" placeholder="http://localhost:3000/api/ai" autocomplete="off">
+            </div>
+            <div class="modal-field">
+              <label>API key</label>
+              <input type="password" id="aiKeyInput" placeholder="sk-ant-…" autocomplete="off">
+            </div>
+            <div class="modal-actions">
+              <button class="modal-btn-cancel" onclick="closeAISettings()">CANCEL</button>
+              <button class="modal-btn-save" onclick="saveAISettings()">SAVE</button>
+            </div>
+            <button class="modal-btn-disconnect" id="aiDisconnectBtn" onclick="disconnectAI()">DISCONNECT</button>
+          </div>
+        </div>
+
+      </div>
+
+      <nav class="navbar" id="navbar">
+        <button class="nav-item active" data-nav="home" onclick="goTab('home')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-7 9 7" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 10v9a1 1 0 001 1h4v-6h4v6h4a1 1 0 001-1v-9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Home</span><i class="dot"></i>
+        </button>
+        <button class="nav-item" data-nav="habits" onclick="goTab('habits')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M8 12l2.5 2.5L16 9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Habits</span><i class="dot"></i>
+        </button>
+        <button class="nav-item" data-nav="goals" onclick="goTab('goals')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="12" cy="12" r="0.8" fill="currentColor"/></svg>
+          <span>Goals</span><i class="dot"></i>
+        </button>
+        <button class="nav-item" data-nav="analytics" onclick="goTab('analytics')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V10M11 19V5M18 19v-6" stroke-linecap="round"/></svg>
+          <span>Analytics</span><i class="dot"></i>
+        </button>
+        <button class="nav-item" data-nav="ai" onclick="goTab('ai')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z" stroke-linejoin="round"/></svg>
+          <span>AI</span><i class="dot"></i>
+        </button>
+      </nav>
+    </div>
+  </div>
+  <div class="studio-caption">LEDGER — a Bloomberg terminal for your personal life. Tap habit checkmarks, switch tabs, and open a goal to see the data move.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const COLORS = { positive:'#35D07F', negative:'#FF5C5C', accent:'#4C8DFF', text:'#F5F5F5', muted:'#5A5A5A', border:'#242424' };
+  const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  /* ---------- date / seeded rng ---------- */
+  const now = new Date();
+  const WEEKDAYS = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+  const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  const todayDow = (now.getDay()+6)%7; // 0=Mon
+
+  function mulberry32(seed){
+    return function(){
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ---------- data model ---------- */
+  const HABITS = [
+    {id:'wake', name:'WAKE 06:30', sub:'MORNING', xp:10, seed:11, bias:0.86},
+    {id:'study', name:'STUDY 60M', sub:'DEEP WORK', xp:20, seed:22, bias:0.91},
+    {id:'read', name:'READ 20P', sub:'DAILY', xp:10, seed:33, bias:0.83},
+    {id:'workout', name:'WORKOUT', sub:'45 MIN', xp:15, seed:44, bias:0.68},
+    {id:'qcm', name:'QCM 30/DAY', sub:'PRACTICE', xp:25, seed:55, bias:0.74},
+    {id:'clean', name:'CLEAN ROOM', sub:'DAILY', xp:5, seed:66, bias:0.88},
+  ];
+
+  const HIST_DAYS = 30;
+  function genHistory(h){
+    const rng = mulberry32(h.seed);
+    const days = [];
+    for(let i=0;i<HIST_DAYS;i++){
+      const r = rng();
+      let state = r < h.bias ? 'done' : (r < h.bias+0.12 ? 'partial' : 'empty');
+      days.push(state);
+    }
+    return days;
+  }
+  HABITS.forEach(h=>{ h.history = genHistory(h); h.history[HIST_DAYS-1] = 'empty'; }); // today starts empty
+
+  function todayState(h){ return h.history[HIST_DAYS-1]; }
+  function setToday(h, done){ h.history[HIST_DAYS-1] = done ? 'done' : 'empty'; }
+
+  function last7(h){ return h.history.slice(HIST_DAYS-7); }
+  function completionPct(h, n){
+    const arr = h.history.slice(HIST_DAYS-n);
+    const score = arr.reduce((s,v)=> s + (v==='done'?1:v==='partial'?0.5:0), 0);
+    return (score/arr.length*100);
+  }
+  function currentStreak(h){
+    // Today not yet marked shouldn't zero out a streak still running from yesterday —
+    // the day isn't over. Only a missed (empty) *past* day breaks it.
+    let idx = HIST_DAYS-1;
+    if(h.history[idx] !== 'done') idx -= 1;
+    let s=0;
+    for(let i=idx;i>=0;i--){
+      if(h.history[i]==='done') s++; else break;
+    }
+    return s;
+  }
+  function bestStreak(h){
+    let best=0,cur=0;
+    for(let i=0;i<HIST_DAYS;i++){
+      if(h.history[i]==='done'){cur++;best=Math.max(best,cur);} else cur=0;
+    }
+    return Math.max(best, currentStreak(h), h.bestOverride||0);
+  }
+  function weekOverWeekDelta(h){
+    const score = arr => arr.reduce((s,v)=> s+(v==='done'?1:v==='partial'?0.5:0),0)/arr.length*100;
+    const thisWeek = h.history.slice(HIST_DAYS-7);
+    const lastWeek = h.history.slice(HIST_DAYS-14, HIST_DAYS-7);
+    return score(thisWeek) - score(lastWeek);
+  }
+  HABITS.find(h=>h.id==='study').bestOverride = 31;
+
+  const GOALS = [
+    {
+      id:'medical', name:'PASS MEDICAL EXAM', pct:72.4, deadline:'2026-08-31', weekDelta:4.8,
+      habits:['study','qcm'], habitOverrides:{study:86, qcm:71},
+      extraHabits:[{name:'BIOLOGY',pct:92},{name:'CHEMISTRY',pct:64}],
+      milestones:[
+        {text:'Biology completed', done:true},
+        {text:'Chemistry completed', done:false},
+        {text:'500 QCM (320/500)', done:false},
+        {text:'10 mock exams (4/10)', done:false},
+      ],
+      history: (()=>{ const rng=mulberry32(101); let v=38; return Array.from({length:30},()=>{ v=Math.min(96,Math.max(30, v + (rng()-0.32)*4)); return v; }); })(),
+      contrib:[2.1,1.8,3.4,0.8,-0.6,2.9,1.2],
+    },
+    {
+      id:'programming', name:'LEARN PROGRAMMING', pct:45, deadline:'2026-12-01', weekDelta:2.2,
+      habits:[], habitOverrides:{},
+      extraHabits:[{name:'DAILY CODING 45M',pct:58},{name:'BUILD PROJECT',pct:33}],
+      milestones:[
+        {text:'Finish fundamentals course', done:true},
+        {text:'Ship first project', done:false},
+        {text:'50 exercises solved', done:false},
+      ],
+      history: (()=>{ const rng=mulberry32(202); let v=12; return Array.from({length:30},()=>{ v=Math.min(60,Math.max(8, v + (rng()-0.25)*3.5)); return v; }); })(),
+      contrib:[1.1,0.4,1.8,-0.2,0.9,1.4,0.6],
+    },
+  ];
+
+  let level = 12, xp = 1840, xpToday = 0;
+  function xpReq(lvl){ return lvl===12 ? 2000 : 2000 + (lvl-12)*80; }
+
+  const monthlyMetrics = {
+    COMPLETION: (()=>{ const rng=mulberry32(301); let v=58; return Array.from({length:30},()=>{ v=Math.min(96,Math.max(30,v+(rng()-0.42)*6)); return Math.round(v*10)/10; }); })(),
+    XP: (()=>{ const rng=mulberry32(302); let v=60; return Array.from({length:30},()=>{ v=Math.min(220,Math.max(20,v+(rng()-0.45)*20)); return Math.round(v); }); })(),
+    STREAK: (()=>{ let v=0; const rng=mulberry32(303); return Array.from({length:30},()=>{ v = rng()<0.82 ? v+1 : Math.max(0,Math.round(v*0.3)); return v; }); })(),
+    'GOAL PROGRESS': (()=>{ const rng=mulberry32(304); let v=20; return Array.from({length:30},()=>{ v=Math.min(75,v+rng()*2.2); return Math.round(v*10)/10; }); })(),
+    HABITS: (()=>{ const rng=mulberry32(305); return Array.from({length:30},()=>Math.round(2+rng()*4)); })(),
+  };
+  const metricFormat = {
+    COMPLETION: v=>v.toFixed(1)+'%', XP: v=>'+'+Math.round(v)+' XP', STREAK: v=>Math.round(v)+'D',
+    'GOAL PROGRESS': v=>v.toFixed(1)+'%', HABITS: v=>Math.round(v)+'/6',
+  };
+
+  /* ---------- chart builders ---------- */
+  function lineChart(values, opts){
+    opts = opts || {};
+    const w = opts.w||320, h = opts.h||110, color = opts.color||COLORS.positive;
+    const area = opts.area!==false, grid = opts.grid!==false;
+    const padX = 6, padY = 10;
+    const max = Math.max.apply(null, values), min = Math.min.apply(null, values);
+    const range = (max-min)||1;
+    const n = values.length;
+    const stepX = n>1 ? (w-padX*2)/(n-1) : 0;
+    const pts = values.map((v,i)=>{
+      const x = padX + i*stepX;
+      const y = padY + (1-(v-min)/range)*(h-padY*2);
+      return [x,y];
+    });
+    const path = pts.map((p,i)=> (i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+    const areaPath = path + ' L '+pts[n-1][0].toFixed(1)+','+(h-padY)+' L '+pts[0][0].toFixed(1)+','+(h-padY)+' Z';
+    const gid = 'g'+Math.random().toString(36).slice(2,9);
+    let gridLines = '';
+    if(grid){
+      [0.25,0.5,0.75].forEach(f=>{
+        const y=(padY+f*(h-padY*2)).toFixed(1);
+        gridLines += '<line x1="'+padX+'" y1="'+y+'" x2="'+(w-padX)+'" y2="'+y+'" stroke="'+COLORS.border+'" stroke-width="1" stroke-dasharray="2,3" opacity="0.6"/>';
+      });
+    }
+    const last = pts[n-1];
+    return '<svg viewBox="0 0 '+w+' '+h+'" class="chart-svg" preserveAspectRatio="none">'+
+      '<defs><linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1">'+
+      '<stop offset="0%" stop-color="'+color+'" stop-opacity="0.26"/>'+
+      '<stop offset="100%" stop-color="'+color+'" stop-opacity="0"/></linearGradient></defs>'+
+      gridLines+
+      (area? '<path d="'+areaPath+'" fill="url(#'+gid+')" stroke="none"/>' : '')+
+      '<path d="'+path+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'+
+      '<circle cx="'+last[0].toFixed(1)+'" cy="'+last[1].toFixed(1)+'" r="4.5" fill="#050505" stroke="'+color+'" stroke-width="2"/>'+
+      '<circle cx="'+last[0].toFixed(1)+'" cy="'+last[1].toFixed(1)+'" r="2" fill="'+color+'"/>'+
+      '</svg>';
+  }
+  function sparkline(values, color){
+    const w=104,h=34,padX=2,padY=4;
+    const max=Math.max.apply(null,values), min=Math.min.apply(null,values), range=(max-min)||1;
+    const n=values.length, stepX=(w-padX*2)/(n-1);
+    const pts=values.map((v,i)=>[padX+i*stepX, padY+(1-(v-min)/range)*(h-padY*2)]);
+    const path=pts.map((p,i)=>(i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+    const last=pts[n-1];
+    return '<svg viewBox="0 0 '+w+' '+h+'" class="chart-svg"><path d="'+path+'" fill="none" stroke="'+color+'" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="'+last[0].toFixed(1)+'" cy="'+last[1].toFixed(1)+'" r="2.6" fill="'+color+'"/></svg>';
+  }
+
+  /* ---------- render: header ---------- */
+  function renderHeader(){
+    const h = now.getHours();
+    document.getElementById('greeting').textContent = h<12?'GOOD MORNING':(h<18?'GOOD AFTERNOON':'GOOD EVENING');
+    document.getElementById('dateLine').textContent = WEEKDAYS[todayDow]+' '+String(now.getDate()).padStart(2,'0')+' '+MONTHS[now.getMonth()];
+    document.getElementById('statusTime').textContent = String(h%12||12)+':'+String(now.getMinutes()).padStart(2,'0');
+  }
+
+  /* ---------- render: home habits + stats ---------- */
+  function todayBaselineTotal(){ return HABITS.length; }
+  function todayDoneTotal(){ return HABITS.filter(h=>todayState(h)==='done').length; }
+
+  const YESTERDAY_PCT = 66.0;
+
+  function renderTodayHabits(){
+    const list = document.getElementById('todayHabitList');
+    list.innerHTML = HABITS.map(h=>{
+      const done = todayState(h)==='done';
+      return '<div class="habit-row" data-hid="'+h.id+'">'+
+        '<div class="check '+(done?'done':'')+'" onclick="toggleHabit(event,\''+h.id+'\')">'+CHECK_SVG+'</div>'+
+        '<div class="habit-main"><div class="habit-name '+(done?'done':'')+'">'+h.name+'</div><div class="habit-sub">'+h.sub+'</div></div>'+
+        '<div class="habit-xp '+(done?'done':'')+'">+'+h.xp+' XP</div>'+
+        '</div>';
+    }).join('');
+    document.getElementById('habitDoneCount').textContent = todayDoneTotal()+'/'+todayBaselineTotal();
+  }
+
+  function computeTodayPct(){
+    const score = HABITS.reduce((s,h)=> s + (todayState(h)==='done'?1: todayState(h)==='partial'?0.5:0), 0);
+    return score/HABITS.length*100;
+  }
+
+  function renderTodayStats(){
+    const pct = computeTodayPct();
+    document.getElementById('todayPct').textContent = pct.toFixed(1)+'%';
+    const delta = pct - YESTERDAY_PCT;
+    const dEl = document.getElementById('todayDelta');
+    dEl.textContent = (delta>=0?'+':'')+delta.toFixed(1)+'% VS YESTERDAY';
+    dEl.className = 'delta '+(delta>0.05?'pos':delta<-0.05?'neg':'flat');
+
+    const spark = [58,61,55,64,60,66,pct];
+    document.getElementById('todaySpark').innerHTML = sparkline(spark, delta>=0?COLORS.positive:COLORS.negative);
+  }
+
+  function renderXP(){
+    const req = xpReq(level);
+    document.getElementById('lvlNum').textContent = level;
+    document.getElementById('lvlNext').textContent = level+1;
+    document.getElementById('xpCur').textContent = xp.toLocaleString();
+    document.getElementById('xpReq').textContent = req.toLocaleString();
+    document.getElementById('xpToNext').textContent = (req-xp).toLocaleString();
+    document.getElementById('xpBar').style.width = Math.min(100, xp/req*100)+'%';
+    document.getElementById('xpTodayBadge').textContent = '+'+xpToday+' XP TODAY';
+  }
+
+  function renderWeek(){
+    const base = [91,84,76,88,92,63,78];
+    base[todayDow] = Math.round(computeTodayPct());
+    const avg = base.reduce((a,b)=>a+b,0)/7;
+    document.getElementById('weekPct').textContent = Math.round(avg)+'%';
+    document.getElementById('weekChart').innerHTML = lineChart(base,{h:88,color:COLORS.positive});
+    const wd = document.getElementById('weekDelta');
+    const delta = avg-78.9;
+    wd.textContent = (delta>=0?'+':'')+delta.toFixed(1)+'%';
+    wd.className = 'delta '+(delta>=0?'pos':'neg');
+    return base;
+  }
+
+  function renderHomeGoals(){
+    document.getElementById('homeGoalsList').innerHTML = GOALS.map((g,i)=>{
+      return '<div style="padding:11px 0;'+(i<GOALS.length-1?'border-bottom:1px solid var(--border-soft);':'')+'cursor:pointer;" onclick="openGoal(\''+g.id+'\')">'+
+        '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:6px;"><span>'+g.name+'</span><span class="mono">'+g.pct.toFixed(0)+'%</span></div>'+
+        '<div class="bar thin"><div class="bar-fill positive" style="width:'+g.pct+'%;"></div></div>'+
+        '</div>';
+    }).join('');
+  }
+
+  /* ---------- habit grid (Habits screen) ---------- */
+  function renderGrid(){
+    const table = document.getElementById('habitGridTable');
+    let head = '<tr><th></th>';
+    for(let i=0;i<HIST_DAYS;i++){
+      const dayNum = new Date(now.getTime() - (HIST_DAYS-1-i)*86400000).getDate();
+      head += '<th class="'+(i===HIST_DAYS-1?'today-col':'')+'">'+dayNum+'</th>';
+    }
+    head += '</tr>';
+    let rows = HABITS.map(h=>{
+      let cells = h.history.map((s,i)=>{
+        const isToday = i===HIST_DAYS-1;
+        let cls = s==='done'?'done':s==='partial'?'partial':'';
+        return '<td><span class="cell '+cls+' '+(isToday?'today':'')+'" '+(isToday?'onclick="toggleHabit(event,\''+h.id+'\')" style="cursor:pointer;"':'')+'></span></td>';
+      }).join('');
+      return '<tr><td class="rowlabel" onclick="openHabit(\''+h.id+'\')"><div class="grid-habit-name">'+h.name+'</div><div class="grid-habit-sub">'+h.sub+'</div></td>'+cells+'</tr>';
+    }).join('');
+    table.innerHTML = head+rows;
+  }
+
+  function renderGridWeekly(base){
+    const totalPossible = HABITS.length*7;
+    const done = HABITS.reduce((s,h)=> s + last7(h).filter(v=>v==='done').length,0);
+    const pct = Math.round(done/totalPossible*100);
+    document.getElementById('gridWeekPct').textContent = pct+'%';
+    document.getElementById('gridWeekBar').style.width = pct+'%';
+    document.getElementById('gridWeekFrac').textContent = done+' / '+totalPossible;
+
+    document.getElementById('dayBreakdown').innerHTML = base.map((v,i)=>{
+      return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;">'+
+        '<span class="label-sec" style="width:34px;">'+WEEKDAYS[i]+'</span>'+
+        '<div class="bar" style="flex:1;"><div class="bar-fill '+(v>=75?'positive':'accent')+'" style="width:'+v+'%;"></div></div>'+
+        '<span class="mono" style="width:38px;text-align:right;font-size:12px;">'+v+'%</span>'+
+        '</div>';
+    }).join('');
+  }
+
+  /* ---------- goals screen ---------- */
+  function renderGoalsList(){
+    document.getElementById('goalsList').innerHTML = GOALS.map(g=>{
+      const daysLeft = Math.max(0, Math.ceil((new Date(g.deadline)-now)/86400000));
+      const assoc = g.extraHabits.map(a=>'<div class="assoc-habit"><span>'+a.name+'</span><span>'+a.pct+'%</span></div>').join('');
+      return '<div class="card goal-card" onclick="openGoal(\''+g.id+'\')">'+
+        '<div class="goal-top"><span class="goal-name">'+g.name+'</span><span class="delta pos">+'+g.weekDelta+'%</span></div>'+
+        '<div class="goal-pct mono">'+g.pct.toFixed(1)+'%</div>'+
+        '<div class="bar"><div class="bar-fill positive" style="width:'+g.pct+'%;"></div></div>'+
+        '<div class="goal-meta"><span class="label-sec">'+daysLeft+' DAYS LEFT</span><span class="label-sec">THIS WEEK</span></div>'+
+        '<hr class="rule">'+assoc+
+        '</div>';
+    }).join('');
+  }
+
+  window.openGoal = function(id){
+    const g = GOALS.find(x=>x.id===id);
+    document.getElementById('goalDetailTag').textContent = 'GOAL · '+((Math.max(0,Math.ceil((new Date(g.deadline)-now)/86400000)))+' DAYS LEFT');
+    document.getElementById('goalDetailName').textContent = g.name;
+    document.getElementById('goalDetailPct').textContent = g.pct.toFixed(1)+'%';
+    document.getElementById('goalDetailBar').style.width = g.pct+'%';
+    const d = new Date(g.deadline);
+    document.getElementById('goalDetailDeadline').textContent = String(d.getDate()).padStart(2,'0')+' '+MONTHS[d.getMonth()]+' '+d.getFullYear();
+    document.getElementById('goalDetailChart').innerHTML = lineChart(g.history,{h:110,color:COLORS.positive});
+    document.getElementById('goalMilestones').innerHTML = g.milestones.map(m=>{
+      return '<div class="milestone-row"><div class="milestone-box '+(m.done?'done':'')+'">'+CHECK_SVG+'</div><div class="milestone-text '+(m.done?'done':'')+'">'+m.text+'</div></div>';
+    }).join('');
+    document.getElementById('goalHabits').innerHTML = g.extraHabits.map(a=>{
+      return '<div class="assoc-habit" style="padding:8px 0;"><span>'+a.name+'</span><span>'+a.pct+'%</span></div>';
+    }).join('') || '<div class="label-sec">No linked habits yet</div>';
+    document.getElementById('goalContrib').innerHTML = g.contrib.map((c,i)=>{
+      const day = WEEKDAYS[(todayDow-6+i+700)%7];
+      return '<div class="contrib-row"><span class="day">'+day+'</span><span style="color:'+(c>=0?COLORS.positive:COLORS.negative)+';">'+(c>=0?'+':'')+c.toFixed(1)+'%</span></div>';
+    }).join('');
+    openOverlay('goalOverlay');
+  };
+
+  document.getElementById('addGoalToggle').addEventListener('click', function(){
+    document.getElementById('addGoalForm').classList.toggle('open');
+  });
+  document.getElementById('newGoalSubmit').addEventListener('click', function(){
+    const name = document.getElementById('newGoalName').value.trim();
+    const date = document.getElementById('newGoalDate').value;
+    if(!name || !date) return;
+    GOALS.push({
+      id:'g'+Date.now(), name:name.toUpperCase(), pct:0, deadline:date, weekDelta:0,
+      habits:[], habitOverrides:{}, extraHabits:[],
+      milestones:[{text:'Define first milestone', done:false}],
+      history:Array.from({length:30},()=>0),
+      contrib:[0,0,0,0,0,0,0],
+    });
+    document.getElementById('newGoalName').value='';
+    document.getElementById('newGoalDate').value='';
+    document.getElementById('addGoalForm').classList.remove('open');
+    renderGoalsList();
+  });
+
+  /* ---------- habit detail ---------- */
+  window.openHabit = function(id){
+    const h = HABITS.find(x=>x.id===id);
+    document.getElementById('habitDetailName').textContent = h.name;
+    document.getElementById('habitDetailStreak').textContent = currentStreak(h)+' DAYS';
+    document.getElementById('habitDetailBest').textContent = bestStreak(h)+' DAYS';
+    document.getElementById('habitDetailCompletion').textContent = completionPct(h,30).toFixed(1)+'%';
+    const wk = weekOverWeekDelta(h);
+    document.getElementById('habitDetailWeek').innerHTML = '<span style="color:'+(wk>=0?COLORS.positive:COLORS.negative)+';">'+(wk>=0?'+':'')+wk.toFixed(1)+'%</span>';
+    document.getElementById('habitDetailHeatmap').innerHTML = h.history.map((s,i)=>{
+      return '<div class="heat-cell '+(s==='done'?'done':s==='partial'?'partial':'')+'"></div>';
+    }).join('');
+    openOverlay('habitOverlay');
+  };
+
+  /* ---------- overlays ---------- */
+  window.openOverlay = function(id){ document.getElementById(id).classList.add('open'); };
+  window.closeOverlay = function(id){ document.getElementById(id).classList.remove('open'); };
+
+  /* ---------- analytics screen ---------- */
+  let activeMetric = 'COMPLETION';
+  function renderMetricChips(){
+    const chips = document.getElementById('metricChips');
+    chips.innerHTML = Object.keys(monthlyMetrics).map(m=>{
+      return '<button class="chip '+(m===activeMetric?'active':'')+'" onclick="setMetric(\''+m+'\')">'+m+'</button>';
+    }).join('');
+  }
+  window.setMetric = function(m){
+    activeMetric = m;
+    renderMetricChips();
+    renderMonthly();
+  };
+  function renderMonthly(){
+    const data = monthlyMetrics[activeMetric];
+    const last = data[data.length-1], first = data[0];
+    document.getElementById('monthlyHead').textContent = metricFormat[activeMetric](last);
+    document.getElementById('monthlyLabel').textContent = 'MONTHLY '+activeMetric;
+    const delta = last-first;
+    const dEl = document.getElementById('monthlyDelta');
+    const pctDelta = first!==0 ? (delta/Math.abs(first)*100) : 0;
+    dEl.textContent = (delta>=0?'+':'')+pctDelta.toFixed(1)+'%';
+    dEl.className = 'delta '+(delta>=0?'pos':'neg');
+    document.getElementById('monthlyChart').innerHTML = lineChart(data,{h:120,color:delta>=0?COLORS.positive:COLORS.negative});
+  }
+
+  function renderStreaks(){
+    const top = [...HABITS].sort((a,b)=>currentStreak(b)-currentStreak(a)).slice(0,4);
+    document.getElementById('streakGrid').innerHTML = top.map(h=>{
+      return '<div class="stat-mini"><div class="label-sec" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+h.name+'</div>'+
+        '<div class="v" style="color:'+COLORS.positive+';">'+currentStreak(h)+'D</div>'+
+        '<div class="label-sec" style="margin-top:2px;">BEST '+bestStreak(h)+'D</div></div>';
+    }).join('');
+  }
+
+  let activeHeatHabit = HABITS[1].id;
+  function renderHeatmapChips(){
+    document.getElementById('heatmapChips').innerHTML = HABITS.map(h=>{
+      return '<button class="chip '+(h.id===activeHeatHabit?'active':'')+'" onclick="setHeatHabit(\''+h.id+'\')">'+h.name+'</button>';
+    }).join('');
+  }
+  window.setHeatHabit = function(id){ activeHeatHabit = id; renderHeatmapChips(); renderHeatmap(); };
+  function renderHeatmap(){
+    const h = HABITS.find(x=>x.id===activeHeatHabit);
+    document.getElementById('heatStreak').textContent = currentStreak(h)+'D';
+    document.getElementById('heatBest').textContent = bestStreak(h)+'D';
+    document.getElementById('heatCompletion').textContent = completionPct(h,30).toFixed(1)+'%';
+    const wk = weekOverWeekDelta(h);
+    document.getElementById('heatWeek').innerHTML = '<span style="color:'+(wk>=0?COLORS.positive:COLORS.negative)+';">'+(wk>=0?'+':'')+wk.toFixed(1)+'%</span>';
+    document.getElementById('heatmapGrid').innerHTML = h.history.map(s=>{
+      return '<div class="heat-cell '+(s==='done'?'done':s==='partial'?'partial':'')+'"></div>';
+    }).join('');
+  }
+
+  function renderRewards(){
+    const lifetime = 3840 + Math.round(xpToday*0.6);
+    document.getElementById('lifetimeXp').textContent = lifetime.toLocaleString();
+    const tiers = [100,250,500,1000,2000,5000];
+    document.getElementById('rewardTiers').innerHTML = tiers.map(t=>{
+      const unlocked = lifetime>=t;
+      return '<div class="reward-row"><span class="reward-xp">'+t.toLocaleString()+' XP</span>'+
+        '<div class="reward-status '+(unlocked?'unlocked':'locked')+'">'+
+        (unlocked
+          ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+          : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="10.5" width="14" height="9" rx="1.6"/><path d="M8 10.5V7.5a4 4 0 018 0v3" stroke-linecap="round"/></svg>')+
+        '</div></div>';
+    }).join('');
+    const customs = [{xp:2000,label:'Movie night'},{xp:5000,label:'New book'}];
+    document.getElementById('customRewards').innerHTML = customs.map(c=>{
+      const pct = Math.min(100, lifetime/c.xp*100);
+      return '<div class="custom-reward"><div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;"><span>"'+c.label+'"</span><span class="mono label-sec">'+c.xp.toLocaleString()+' XP</span></div>'+
+        '<div class="bar" style="margin-top:8px;"><div class="bar-fill '+(pct>=100?'positive':'accent')+'" style="width:'+pct+'%;"></div></div></div>';
+    }).join('');
+  }
+
+  /* ---------- AI insight toggle ---------- */
+  window.toggleInsight = function(card){
+    const d = card.querySelector('.insight-detail');
+    d.classList.toggle('open');
+  };
+
+  /* ---------- AI connection settings (bring-your-own-key) ---------- */
+  const AI_KEY_STORAGE = 'ledger_ai_key';
+  const AI_URL_STORAGE = 'ledger_ai_backend_url';
+  // Same-origin by default: if this page is served over http(s) — from this very
+  // backend, from your PC, or from a phone on the same network — point at /api/ai
+  // on whatever host actually served the page. Only fall back to localhost:3000
+  // when the page has no real origin (e.g. opened as a bare local file:// or inside
+  // the sandboxed claude.ai Artifact preview).
+  const AI_DEFAULT_URL = (location.protocol === 'http:' || location.protocol === 'https:')
+    ? (location.origin + '/api/ai')
+    : 'http://localhost:3000/api/ai';
+
+  function getAIConfig(){
+    return {
+      apiKey: localStorage.getItem(AI_KEY_STORAGE) || '',
+      backendUrl: localStorage.getItem(AI_URL_STORAGE) || AI_DEFAULT_URL,
+    };
+  }
+  function isAIConnected(){ return !!getAIConfig().apiKey; }
+
+  function renderAIConnStatus(){
+    const dot = document.getElementById('aiConnDot');
+    if(!dot) return; // AI screen not in DOM yet on first paint tick
+    const on = isAIConnected();
+    dot.classList.toggle('on', on);
+    document.getElementById('aiConnText').textContent = on ? 'CONNECTED — LIVE ANSWERS' : 'NOT CONNECTED — REPLIES BELOW ARE A STATIC DEMO';
+    document.getElementById('aiConnLink').textContent = on ? 'SETTINGS' : 'CONNECT';
+  }
+
+  window.openAISettings = function(){
+    const cfg = getAIConfig();
+    document.getElementById('aiUrlInput').value = cfg.backendUrl;
+    document.getElementById('aiKeyInput').value = cfg.apiKey;
+    document.getElementById('aiDisconnectBtn').style.display = cfg.apiKey ? 'block' : 'none';
+    openOverlay('aiSettingsBackdrop');
+  };
+  window.closeAISettings = function(){ closeOverlay('aiSettingsBackdrop'); };
+  window.saveAISettings = function(){
+    const key = document.getElementById('aiKeyInput').value.trim();
+    const url = document.getElementById('aiUrlInput').value.trim() || AI_DEFAULT_URL;
+    if(key) localStorage.setItem(AI_KEY_STORAGE, key); else localStorage.removeItem(AI_KEY_STORAGE);
+    localStorage.setItem(AI_URL_STORAGE, url);
+    renderAIConnStatus();
+    closeAISettings();
+  };
+  window.disconnectAI = function(){
+    localStorage.removeItem(AI_KEY_STORAGE);
+    document.getElementById('aiKeyInput').value = '';
+    renderAIConnStatus();
+    closeAISettings();
+  };
+
+  function buildDataSnapshot(){
+    return {
+      level, xp, xpToday,
+      habits: HABITS.map(h=>({
+        name: h.name,
+        currentStreak: currentStreak(h),
+        bestStreak: bestStreak(h),
+        completion30d: Math.round(completionPct(h,30)*10)/10,
+        completion7d: Math.round(completionPct(h,7)*10)/10,
+      })),
+      goals: GOALS.map(g=>({ name: g.name, pct: g.pct, weekDelta: g.weekDelta, deadline: g.deadline })),
+    };
+  }
+
+  /* ---------- AI chat ---------- */
+  const OFFLINE_DEMO_ANSWERS = {
+    "What's my best streak right now?": function(){
+      const best = [...HABITS].sort((a,b)=>currentStreak(b)-currentStreak(a))[0];
+      return best.name+' is your longest active streak at <b style="color:'+COLORS.positive+';">'+currentStreak(best)+' days</b>, closing in on its best of '+bestStreak(best)+'.';
+    },
+    "Which goal needs attention?": function(){
+      const worst = [...GOALS].sort((a,b)=>a.weekDelta-b.weekDelta)[0];
+      return '<b>'+worst.name+'</b> grew the slowest this week at <b style="color:'+(worst.weekDelta>=0?COLORS.positive:COLORS.negative)+';">'+(worst.weekDelta>=0?'+':'')+worst.weekDelta+'%</b>. It sits at '+worst.pct.toFixed(1)+'% overall.';
+    },
+    "Plan tomorrow for me": function(){
+      return 'Based on your goal priorities and completion history, I would schedule STUDY and QCM before noon, then WORKOUT mid-afternoon. Open the Daily Planner card above and tap Generate to see full timing.';
+    },
+  };
+
+  function appendBubble(html, who, isHTML){
+    const scroll = document.getElementById('chatScroll');
+    const div = document.createElement('div');
+    div.className = 'bubble '+who;
+    if(isHTML) div.innerHTML = html; else div.textContent = html;
+    scroll.appendChild(div);
+    scroll.scrollTop = scroll.scrollHeight;
+    return div;
+  }
+
+  async function askAndRespond(question, offlineFallback){
+    const scroll = document.getElementById('chatScroll');
+    const typing = document.createElement('div');
+    typing.className = 'bubble ai';
+    typing.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+    scroll.appendChild(typing);
+    scroll.scrollTop = scroll.scrollHeight;
+
+    const cfg = getAIConfig();
+
+    // Not connected: either show the canned demo answer (suggestion chips only)
+    // or explain that live answers need a backend connection.
+    if(!cfg.apiKey){
+      await new Promise(function(r){ setTimeout(r, 500); });
+      typing.remove();
+      if(offlineFallback){
+        appendBubble(offlineFallback()+'<div class="label-sec" style="margin-top:8px;color:var(--text-muted);">(static demo — tap ⚙ above to connect a real backend)</div>', 'ai', true);
+      } else {
+        appendBubble('Not connected to a live AI backend yet. Tap the ⚙ above the chat to add your backend URL and API key.', 'ai');
+      }
+      return;
+    }
+
+    // Connected: call the user's own backend, which calls the Claude API
+    // server-side. The key never goes anywhere except that one URL.
+    try{
+      const res = await fetch(cfg.backendUrl, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json', 'Authorization':'Bearer '+cfg.apiKey},
+        body: JSON.stringify({ question: question, snapshot: buildDataSnapshot() }),
+      });
+      let data = {};
+      try { data = await res.json(); } catch(e){ /* non-JSON error body */ }
+      typing.remove();
+      if(!res.ok){
+        appendBubble('AI backend error ('+res.status+'): '+(data.error || 'unknown error'), 'ai');
+        return;
+      }
+      appendBubble(data.answer || '(empty response)', 'ai', true);
+    } catch(err){
+      typing.remove();
+      appendBubble('Could not reach '+cfg.backendUrl+'. Is your backend running?', 'ai');
+    }
+  }
+
+  window.askAI = function(btn){
+    const question = btn.textContent;
+    appendBubble(question, 'user');
+    askAndRespond(question, OFFLINE_DEMO_ANSWERS[question]);
+  };
+
+  window.sendChat = function(){
+    const input = document.getElementById('chatInput');
+    const val = input.value.trim();
+    if(!val) return;
+    appendBubble(val, 'user');
+    input.value = '';
+    askAndRespond(val, null);
+  };
+  document.getElementById('chatInput').addEventListener('keydown', function(e){ if(e.key==='Enter') sendChat(); });
+
+  /* ---------- daily planner ---------- */
+  const PLAN = [
+    {time:'09:00', title:'STUDY — 60 MIN', sub:'DEEP WORK', xp:20},
+    {time:'11:00', title:'QCM — 30 QUESTIONS', sub:'PRACTICE', xp:25},
+    {time:'15:00', title:'WORKOUT — 45 MIN', sub:'HIGH PRIORITY · 61% RECENT', xp:15},
+    {time:'19:00', title:'READ — 20 PAGES', sub:'DAILY', xp:10},
+  ];
+  document.getElementById('genPlanBtn').addEventListener('click', function(){
+    const total = PLAN.reduce((s,p)=>s+p.xp,0);
+    document.getElementById('plannerBody').innerHTML =
+      PLAN.map(p=>'<div class="planner-row"><div class="planner-time mono">'+p.time+'</div><div class="planner-main"><div class="planner-title">'+p.title+'</div><div class="planner-sub">'+p.sub+'</div></div><div class="planner-xp">+'+p.xp+' XP</div></div>').join('')+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;">'+
+      '<span class="label-sec">TOTAL POTENTIAL</span><span class="mono" style="color:'+COLORS.positive+';font-weight:700;font-size:16px;">+'+total+' XP</span></div>';
+  });
+
+  /* ---------- interactions ---------- */
+  window.toggleHabit = function(evt, id){
+    evt.stopPropagation();
+    const h = HABITS.find(x=>x.id===id);
+    const nowDone = todayState(h)!=='done';
+    setToday(h, nowDone);
+    xp += nowDone ? h.xp : -h.xp;
+    xpToday += nowDone ? h.xp : -h.xp;
+    if(xp >= xpReq(level)){ xp -= xpReq(level); level += 1; }
+    if(xp < 0 && level>1){ level -=1; xp += xpReq(level); }
+
+    if(nowDone){
+      const toast = document.createElement('div');
+      toast.className = 'xp-toast';
+      toast.textContent = '+'+h.xp+' XP';
+      const rect = evt.currentTarget.getBoundingClientRect();
+      toast.style.left = (rect.right+6)+'px';
+      toast.style.top = (rect.top-2)+'px';
+      document.body.appendChild(toast);
+      setTimeout(()=>toast.remove(), 820);
+    }
+    renderAll(true);
+  };
+
+  window.goTab = function(name){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active', s.dataset.screen===name));
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.nav===name));
+    document.getElementById('appBody').closest('.screen-inner').scrollTop = 0;
+  };
+
+  function renderAll(){
+    renderHeader();
+    renderTodayHabits();
+    renderTodayStats();
+    renderXP();
+    const base = renderWeek();
+    renderHomeGoals();
+    renderGrid();
+    renderGridWeekly(base);
+    renderGoalsList();
+    renderMetricChips();
+    renderMonthly();
+    renderStreaks();
+    renderHeatmapChips();
+    renderHeatmap();
+    renderRewards();
+    renderAIConnStatus();
+  }
+
+  renderAll();
+})();
+</script>
