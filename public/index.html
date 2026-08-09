@@ -1347,6 +1347,31 @@
     },
   };
 
+  // The AI backend returns plain-text markdown (**bold**, "* " bullet lines) —
+  // this turns exactly that small subset into safe HTML for the chat bubble.
+  // Everything else is HTML-escaped first, so the model's own output can never
+  // inject markup into the page.
+  function formatAIMarkdown(text){
+    const escapeHtml = (s) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const bold = (s) => s.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+
+    const lines = String(text).split(/\r?\n/);
+    let out = '', inList = false;
+    for(const raw of lines){
+      const line = raw.trim();
+      const bullet = line.match(/^[*-]\s+(.*)$/);
+      if(bullet){
+        if(!inList){ out += '<ul style="margin:6px 0;padding-left:18px;">'; inList = true; }
+        out += '<li style="margin:3px 0;">'+bold(escapeHtml(bullet[1]))+'</li>';
+      } else {
+        if(inList){ out += '</ul>'; inList = false; }
+        if(line) out += '<div style="margin:3px 0;">'+bold(escapeHtml(line))+'</div>';
+      }
+    }
+    if(inList) out += '</ul>';
+    return out || escapeHtml(String(text));
+  }
+
   function appendBubble(html, who, isHTML){
     const scroll = document.getElementById('chatScroll');
     const div = document.createElement('div');
@@ -1395,7 +1420,7 @@
         appendBubble('AI backend error ('+res.status+'): '+(data.error || 'unknown error'), 'ai');
         return;
       }
-      appendBubble(data.answer || '(empty response)', 'ai', true);
+      appendBubble(formatAIMarkdown(data.answer || '(empty response)'), 'ai', true);
     } catch(err){
       typing.remove();
       appendBubble('Could not reach '+cfg.backendUrl+'. Is your backend running?', 'ai');
