@@ -1155,18 +1155,23 @@
     table.parentElement.style.display = '';
     emptyState.style.display = 'none';
 
+    // Today first (leftmost, right next to the sticky row label — visible with
+    // no scrolling), older days extending to the right. i still indexes into
+    // history the normal way (HIST_DAYS-1 = today); only the render order flips.
     let head = '<tr><th></th>';
-    for(let i=0;i<HIST_DAYS;i++){
+    for(let i=HIST_DAYS-1;i>=0;i--){
       const dayNum = new Date(now.getTime() - (HIST_DAYS-1-i)*86400000).getDate();
       head += '<th class="'+(i===HIST_DAYS-1?'today-col':'')+'">'+dayNum+'</th>';
     }
     head += '</tr>';
     let rows = HABITS.map(h=>{
-      let cells = h.history.map((s,i)=>{
+      let cells = '';
+      for(let i=HIST_DAYS-1;i>=0;i--){
+        const s = h.history[i];
         const isToday = i===HIST_DAYS-1;
         let cls = s==='done'?'done':s==='partial'?'partial':'';
-        return '<td><span class="cell '+cls+' '+(isToday?'today':'')+'" '+(isToday?'onclick="toggleHabit(event,\''+h.id+'\')" style="cursor:pointer;"':'')+'></span></td>';
-      }).join('');
+        cells += '<td><span class="cell '+cls+' '+(isToday?'today':'')+'" '+(isToday?'onclick="toggleHabit(event,\''+h.id+'\')" style="cursor:pointer;"':'')+'></span></td>';
+      }
       return '<tr><td class="rowlabel" onclick="openHabit(\''+h.id+'\')"><div class="grid-habit-name">'+h.name+'</div><div class="grid-habit-sub">'+h.sub+'</div></td>'+cells+'</tr>';
     }).join('');
     table.innerHTML = head+rows;
