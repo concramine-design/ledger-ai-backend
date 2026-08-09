@@ -1134,28 +1134,27 @@
     table.parentElement.style.display = '';
     emptyState.style.display = 'none';
 
-    // Normal chronological order — oldest on the left, today on the right,
-    // same reading direction as a calendar. The grid auto-scrolls to today
-    // below so it's still visible without the user having to scroll manually.
+    // Calendar view: today is the first column, then the month ahead extends
+    // to the right (today+1, today+2, ... today+29) as empty cells to fill in
+    // as each day actually arrives. Only today is real, tracked, clickable
+    // data (history[HIST_DAYS-1]) — the other 29 columns are undecided future,
+    // never fabricated. Past history still exists and drives streaks/analytics
+    // (see the Heatmap on the Analytics tab) — this grid is the forward view.
     let head = '<tr><th></th>';
-    for(let i=0;i<HIST_DAYS;i++){
-      const dayNum = new Date(now.getTime() - (HIST_DAYS-1-i)*86400000).getDate();
-      head += '<th class="'+(i===HIST_DAYS-1?'today-col':'')+'">'+dayNum+'</th>';
+    for(let d=0; d<HIST_DAYS; d++){
+      const dayNum = new Date(now.getTime() + d*86400000).getDate();
+      head += '<th class="'+(d===0?'today-col':'')+'">'+dayNum+'</th>';
     }
     head += '</tr>';
     let rows = HABITS.map(h=>{
-      let cells = h.history.map((s,i)=>{
-        const isToday = i===HIST_DAYS-1;
-        let cls = s==='done'?'done':s==='partial'?'partial':'';
-        return '<td><span class="cell '+cls+' '+(isToday?'today':'')+'" '+(isToday?'onclick="toggleHabit(event,\''+h.id+'\')" style="cursor:pointer;"':'')+'></span></td>';
-      }).join('');
+      const todayS = h.history[HIST_DAYS-1];
+      let cells = '<td><span class="cell '+(todayS==='done'?'done':todayS==='partial'?'partial':'')+' today" onclick="toggleHabit(event,\''+h.id+'\')" style="cursor:pointer;"></span></td>';
+      for(let d=1; d<HIST_DAYS; d++){
+        cells += '<td><span class="cell future"></span></td>';
+      }
       return '<tr><td class="rowlabel" onclick="openHabit(\''+h.id+'\')"><div class="grid-habit-name">'+h.name+'</div><div class="grid-habit-sub">'+h.sub+'</div></td>'+cells+'</tr>';
     }).join('');
     table.innerHTML = head+rows;
-
-    // Land on today by default instead of the oldest (leftmost) day.
-    const scroller = table.parentElement;
-    scroller.scrollLeft = scroller.scrollWidth;
   }
 
   function renderGridWeekly(base){
