@@ -1297,9 +1297,15 @@
     openOverlay('aiSettingsBackdrop');
   };
   window.closeAISettings = function(){ closeOverlay('aiSettingsBackdrop'); };
+  function normalizeBackendUrl(raw){
+    let url = (raw || '').trim() || AI_DEFAULT_URL;
+    url = url.replace(/\/+$/, ''); // strip trailing slash(es)
+    if(!/\/api\/ai$/i.test(url)) url += '/api/ai'; // forgiving of "just the site URL"
+    return url;
+  }
   window.saveAISettings = function(){
     const key = document.getElementById('aiKeyInput').value.trim();
-    const url = document.getElementById('aiUrlInput').value.trim() || AI_DEFAULT_URL;
+    const url = normalizeBackendUrl(document.getElementById('aiUrlInput').value);
     if(key) localStorage.setItem(AI_KEY_STORAGE, key); else localStorage.removeItem(AI_KEY_STORAGE);
     localStorage.setItem(AI_URL_STORAGE, url);
     renderAIConnStatus();
