@@ -564,6 +564,9 @@
           <div class="grid-scroll">
             <table class="grid-table" id="habitGridTable"></table>
           </div>
+          <div class="card" id="habitGridEmpty" style="display:none;text-align:center;padding:22px 0;">
+            <div class="label-sec">NO HABITS YET — ADD ONE BELOW</div>
+          </div>
 
           <div class="section">
             <div class="card">
@@ -577,6 +580,14 @@
           <div class="section">
             <div class="section-head"><span class="eyebrow">DAY BREAKDOWN</span></div>
             <div class="card" id="dayBreakdown"></div>
+          </div>
+
+          <button class="add-goal-btn" id="addHabitToggle">+ NEW HABIT</button>
+          <div class="add-goal-form" id="addHabitForm">
+            <input type="text" id="newHabitName" placeholder="HABIT NAME (e.g. STUDY 60M)" maxlength="30">
+            <input type="text" id="newHabitSub" placeholder="CATEGORY (e.g. DAILY, MORNING)" maxlength="20">
+            <input type="number" id="newHabitXp" placeholder="XP PER COMPLETION (default 10)" min="5" max="50">
+            <button id="newHabitSubmit">CREATE HABIT</button>
           </div>
         </section>
 
@@ -615,7 +626,10 @@
           <div class="section">
             <div class="section-head"><span class="eyebrow">HABIT HEATMAP</span></div>
             <div class="chip-row" id="heatmapChips"></div>
-            <div class="card">
+            <div class="card" id="heatmapEmpty" style="display:none;text-align:center;padding:18px 0;">
+              <div class="label-sec">NO HABITS YET — ADD ONE BELOW</div>
+            </div>
+            <div class="card" id="heatmapCard">
               <div class="stat-mini-grid" style="margin-bottom:14px;">
                 <div class="stat-mini"><div class="label-sec">CURRENT STREAK</div><div class="v" id="heatStreak">—</div></div>
                 <div class="stat-mini"><div class="label-sec">BEST STREAK</div><div class="v" id="heatBest">—</div></div>
@@ -630,10 +644,16 @@
             <div class="section-head"><span class="eyebrow">REWARD TRACK</span></div>
             <div class="card">
               <div class="label-sec" style="margin-bottom:2px;">LIFETIME XP</div>
-              <div class="num-huge" style="font-size:22px;" id="lifetimeXp">3,840</div>
+              <div class="num-huge" style="font-size:22px;" id="lifetimeXp">0</div>
               <div id="rewardTiers" style="margin-top:10px;"></div>
               <div class="eyebrow" style="margin-top:14px;">PERSONAL REWARDS</div>
               <div id="customRewards"></div>
+              <button class="add-goal-btn" id="addRewardToggle">+ ADD REWARD</button>
+              <div class="add-goal-form" id="addRewardForm">
+                <input type="text" id="newRewardLabel" placeholder="REWARD (e.g. Movie night)" maxlength="40">
+                <input type="number" id="newRewardXp" placeholder="XP THRESHOLD" min="10">
+                <button id="newRewardSubmit">ADD REWARD</button>
+              </div>
             </div>
           </div>
         </section>
@@ -846,43 +866,21 @@
   const COLORS = { positive:'#35D07F', negative:'#FF5C5C', accent:'#4C8DFF', text:'#F5F5F5', muted:'#5A5A5A', border:'#242424' };
   const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-  /* ---------- date / seeded rng ---------- */
+  /* ---------- date ---------- */
   const now = new Date();
   const WEEKDAYS = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
   const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   const todayDow = (now.getDay()+6)%7; // 0=Mon
 
-  function mulberry32(seed){
-    return function(){
-      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
-      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-      return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    };
-  }
-
   /* ---------- data model ---------- */
-  const HABITS = [
-    {id:'wake', name:'WAKE 06:30', sub:'MORNING', xp:10, seed:11, bias:0.86},
-    {id:'study', name:'STUDY 60M', sub:'DEEP WORK', xp:20, seed:22, bias:0.91},
-    {id:'read', name:'READ 20P', sub:'DAILY', xp:10, seed:33, bias:0.83},
-    {id:'workout', name:'WORKOUT', sub:'45 MIN', xp:15, seed:44, bias:0.68},
-    {id:'qcm', name:'QCM 30/DAY', sub:'PRACTICE', xp:25, seed:55, bias:0.74},
-    {id:'clean', name:'CLEAN ROOM', sub:'DAILY', xp:5, seed:66, bias:0.88},
-  ];
+  // Starts empty on purpose — this is a blank instance. Everything the user
+  // sees is either created by them (Habits/Goals "+ NEW" forms) or by the AI
+  // (its create_habit / create_goal / mark_habit tools), never seeded fake data.
+  const HABITS = [];
+  const GOALS = [];
+  let CUSTOM_REWARDS = [];
 
   const HIST_DAYS = 30;
-  function genHistory(h){
-    const rng = mulberry32(h.seed);
-    const days = [];
-    for(let i=0;i<HIST_DAYS;i++){
-      const r = rng();
-      let state = r < h.bias ? 'done' : (r < h.bias+0.12 ? 'partial' : 'empty');
-      days.push(state);
-    }
-    return days;
-  }
-  HABITS.forEach(h=>{ h.history = genHistory(h); h.history[HIST_DAYS-1] = 'empty'; }); // today starts empty
 
   function todayState(h){ return h.history[HIST_DAYS-1]; }
   function setToday(h, done){ h.history[HIST_DAYS-1] = done ? 'done' : 'empty'; }
@@ -917,50 +915,97 @@
     const lastWeek = h.history.slice(HIST_DAYS-14, HIST_DAYS-7);
     return score(thisWeek) - score(lastWeek);
   }
-  HABITS.find(h=>h.id==='study').bestOverride = 31;
 
-  const GOALS = [
-    {
-      id:'medical', name:'PASS MEDICAL EXAM', pct:72.4, deadline:'2026-08-31', weekDelta:4.8,
-      habits:['study','qcm'], habitOverrides:{study:86, qcm:71},
-      extraHabits:[{name:'BIOLOGY',pct:92},{name:'CHEMISTRY',pct:64}],
-      milestones:[
-        {text:'Biology completed', done:true},
-        {text:'Chemistry completed', done:false},
-        {text:'500 QCM (320/500)', done:false},
-        {text:'10 mock exams (4/10)', done:false},
-      ],
-      history: (()=>{ const rng=mulberry32(101); let v=38; return Array.from({length:30},()=>{ v=Math.min(96,Math.max(30, v + (rng()-0.32)*4)); return v; }); })(),
-      contrib:[2.1,1.8,3.4,0.8,-0.6,2.9,1.2],
-    },
-    {
-      id:'programming', name:'LEARN PROGRAMMING', pct:45, deadline:'2026-12-01', weekDelta:2.2,
-      habits:[], habitOverrides:{},
-      extraHabits:[{name:'DAILY CODING 45M',pct:58},{name:'BUILD PROJECT',pct:33}],
-      milestones:[
-        {text:'Finish fundamentals course', done:true},
-        {text:'Ship first project', done:false},
-        {text:'50 exercises solved', done:false},
-      ],
-      history: (()=>{ const rng=mulberry32(202); let v=12; return Array.from({length:30},()=>{ v=Math.min(60,Math.max(8, v + (rng()-0.25)*3.5)); return v; }); })(),
-      contrib:[1.1,0.4,1.8,-0.2,0.9,1.4,0.6],
-    },
-  ];
+  let level = 1, xp = 0, xpToday = 0, lifetimeXp = 0;
+  function xpReq(lvl){ return 300 + (lvl-1)*60; }
 
-  let level = 12, xp = 1840, xpToday = 0;
-  function xpReq(lvl){ return lvl===12 ? 2000 : 2000 + (lvl-12)*80; }
+  /** Every metric derived live from real habit/goal history — never fabricated. */
+  function computeMonthlyMetrics(){
+    const completion = [], habitsCount = [], xpSeries = [], streakSeries = [];
+    for(let i=0;i<HIST_DAYS;i++){
+      let score=0, doneCount=0, dayXp=0;
+      HABITS.forEach(h=>{
+        const s = h.history[i];
+        if(s==='done'){ score+=1; doneCount+=1; dayXp+=h.xp; }
+        else if(s==='partial'){ score+=0.5; }
+      });
+      completion.push(HABITS.length ? Math.round((score/HABITS.length*100)*10)/10 : 0);
+      habitsCount.push(doneCount);
+      xpSeries.push(dayXp);
 
-  const monthlyMetrics = {
-    COMPLETION: (()=>{ const rng=mulberry32(301); let v=58; return Array.from({length:30},()=>{ v=Math.min(96,Math.max(30,v+(rng()-0.42)*6)); return Math.round(v*10)/10; }); })(),
-    XP: (()=>{ const rng=mulberry32(302); let v=60; return Array.from({length:30},()=>{ v=Math.min(220,Math.max(20,v+(rng()-0.45)*20)); return Math.round(v); }); })(),
-    STREAK: (()=>{ let v=0; const rng=mulberry32(303); return Array.from({length:30},()=>{ v = rng()<0.82 ? v+1 : Math.max(0,Math.round(v*0.3)); return v; }); })(),
-    'GOAL PROGRESS': (()=>{ const rng=mulberry32(304); let v=20; return Array.from({length:30},()=>{ v=Math.min(75,v+rng()*2.2); return Math.round(v*10)/10; }); })(),
-    HABITS: (()=>{ const rng=mulberry32(305); return Array.from({length:30},()=>Math.round(2+rng()*4)); })(),
-  };
+      let maxStreak=0;
+      HABITS.forEach(h=>{
+        let s=0;
+        for(let j=i;j>=0;j--){ if(h.history[j]==='done') s++; else break; }
+        if(s>maxStreak) maxStreak=s;
+      });
+      streakSeries.push(maxStreak);
+    }
+    const avgGoalPct = GOALS.length ? GOALS.reduce((a,g)=>a+g.pct,0)/GOALS.length : 0;
+    return {
+      COMPLETION: completion,
+      XP: xpSeries,
+      STREAK: streakSeries,
+      'GOAL PROGRESS': Array(HIST_DAYS).fill(Math.round(avgGoalPct*10)/10),
+      HABITS: habitsCount,
+    };
+  }
   const metricFormat = {
     COMPLETION: v=>v.toFixed(1)+'%', XP: v=>'+'+Math.round(v)+' XP', STREAK: v=>Math.round(v)+'D',
-    'GOAL PROGRESS': v=>v.toFixed(1)+'%', HABITS: v=>Math.round(v)+'/6',
+    'GOAL PROGRESS': v=>v.toFixed(1)+'%', HABITS: v=>Math.round(v)+(HABITS.length?'/'+HABITS.length:''),
   };
+
+  /* ---------- persistence (localStorage) ---------- */
+  const STORAGE_KEY = 'ledger_state_v1';
+  // Local calendar date, not UTC — must agree with todayDow (which uses local
+  // getDay()) so the "today" boundary lands at local midnight, not UTC midnight.
+  function todayISO(){
+    return now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  }
+
+  function saveState(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        savedDate: todayISO(),
+        level, xp, xpToday, lifetimeXp,
+        habits: HABITS, goals: GOALS, customRewards: CUSTOM_REWARDS,
+      }));
+    } catch(e){ /* storage full or unavailable — app still works this session */ }
+  }
+
+  // A saved history array's last slot was "today" as of savedDate. If real
+  // time has passed since then, roll the window forward so "today" (index
+  // HIST_DAYS-1) is actually today again, instead of silently misdating
+  // every entry after a day passes.
+  function shiftHistoryToToday(h, savedDateISO){
+    if(!savedDateISO) return;
+    const saved = new Date(savedDateISO+'T00:00:00');
+    const today = new Date(todayISO()+'T00:00:00');
+    const diffDays = Math.round((today-saved)/86400000);
+    for(let i=0;i<diffDays;i++){ h.history.push('empty'); h.history.shift(); }
+  }
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return;
+      const saved = JSON.parse(raw);
+      if(Array.isArray(saved.habits)){
+        saved.habits.forEach(h=>{
+          if(!Array.isArray(h.history) || h.history.length!==HIST_DAYS) h.history = Array(HIST_DAYS).fill('empty');
+          shiftHistoryToToday(h, saved.savedDate);
+        });
+        HABITS.splice(0, HABITS.length, ...saved.habits);
+      }
+      if(Array.isArray(saved.goals)) GOALS.splice(0, GOALS.length, ...saved.goals);
+      if(Array.isArray(saved.customRewards)) CUSTOM_REWARDS = saved.customRewards;
+      if(Number.isFinite(saved.level)) level = saved.level;
+      if(Number.isFinite(saved.xp)) xp = saved.xp;
+      if(Number.isFinite(saved.lifetimeXp)) lifetimeXp = saved.lifetimeXp;
+      // xpToday only survives if it was saved earlier today — a new day zeroes it.
+      if(Number.isFinite(saved.xpToday) && saved.savedDate === todayISO()) xpToday = saved.xpToday;
+    } catch(e){ /* corrupted storage — start fresh rather than crash */ }
+  }
 
   /* ---------- chart builders ---------- */
   function lineChart(values, opts){
@@ -1021,10 +1066,16 @@
   function todayBaselineTotal(){ return HABITS.length; }
   function todayDoneTotal(){ return HABITS.filter(h=>todayState(h)==='done').length; }
 
-  const YESTERDAY_PCT = 66.0;
-
   function renderTodayHabits(){
     const list = document.getElementById('todayHabitList');
+    if(!HABITS.length){
+      list.innerHTML = '<div style="padding:18px 0;text-align:center;">'+
+        '<div class="label-sec" style="margin-bottom:10px;">NO HABITS YET</div>'+
+        '<button class="chip active" onclick="goTab(\'habits\')" style="border-radius:8px;">+ ADD YOUR FIRST HABIT</button>'+
+        '</div>';
+      document.getElementById('habitDoneCount').textContent = '0/0';
+      return;
+    }
     list.innerHTML = HABITS.map(h=>{
       const done = todayState(h)==='done';
       return '<div class="habit-row" data-hid="'+h.id+'">'+
@@ -1037,19 +1088,26 @@
   }
 
   function computeTodayPct(){
+    if(!HABITS.length) return 0;
     const score = HABITS.reduce((s,h)=> s + (todayState(h)==='done'?1: todayState(h)==='partial'?0.5:0), 0);
+    return score/HABITS.length*100;
+  }
+  function dayCompletionPct(idx){
+    if(!HABITS.length) return 0;
+    const score = HABITS.reduce((s,h)=> s + (h.history[idx]==='done'?1: h.history[idx]==='partial'?0.5:0), 0);
     return score/HABITS.length*100;
   }
 
   function renderTodayStats(){
     const pct = computeTodayPct();
     document.getElementById('todayPct').textContent = pct.toFixed(1)+'%';
-    const delta = pct - YESTERDAY_PCT;
+    const yesterdayPct = HABITS.length ? dayCompletionPct(HIST_DAYS-2) : 0;
+    const delta = pct - yesterdayPct;
     const dEl = document.getElementById('todayDelta');
     dEl.textContent = (delta>=0?'+':'')+delta.toFixed(1)+'% VS YESTERDAY';
     dEl.className = 'delta '+(delta>0.05?'pos':delta<-0.05?'neg':'flat');
 
-    const spark = [58,61,55,64,60,66,pct];
+    const spark = [6,5,4,3,2,1,0].map(back => dayCompletionPct(HIST_DAYS-1-back));
     document.getElementById('todaySpark').innerHTML = sparkline(spark, delta>=0?COLORS.positive:COLORS.negative);
   }
 
@@ -1064,21 +1122,43 @@
     document.getElementById('xpTodayBadge').textContent = '+'+xpToday+' XP TODAY';
   }
 
+  // Real "this week so far": Mon..Sun, where days after today haven't
+  // happened yet (shown as 0), and past/today days come from real history.
+  function computeWeekBase(){
+    const base = [];
+    for(let d=0; d<7; d++){
+      const daysAgo = todayDow - d;
+      base.push(daysAgo < 0 ? 0 : Math.round(dayCompletionPct(HIST_DAYS-1-daysAgo)));
+    }
+    return base;
+  }
   function renderWeek(){
-    const base = [91,84,76,88,92,63,78];
-    base[todayDow] = Math.round(computeTodayPct());
-    const avg = base.reduce((a,b)=>a+b,0)/7;
+    const base = computeWeekBase();
+    const consideredDays = todayDow+1; // only days that have actually happened
+    const avg = consideredDays ? base.slice(0,consideredDays).reduce((a,b)=>a+b,0)/consideredDays : 0;
     document.getElementById('weekPct').textContent = Math.round(avg)+'%';
     document.getElementById('weekChart').innerHTML = lineChart(base,{h:88,color:COLORS.positive});
     const wd = document.getElementById('weekDelta');
-    const delta = avg-78.9;
+    // Compare to the same weekday range last week, when we have that much history.
+    const prevAvg = HIST_DAYS-7-consideredDays >= 0
+      ? (()=>{ let s=0; for(let d=0; d<consideredDays; d++){ s+=dayCompletionPct(HIST_DAYS-8-(todayDow-d)); } return s/consideredDays; })()
+      : avg;
+    const delta = avg-prevAvg;
     wd.textContent = (delta>=0?'+':'')+delta.toFixed(1)+'%';
     wd.className = 'delta '+(delta>=0?'pos':'neg');
     return base;
   }
 
   function renderHomeGoals(){
-    document.getElementById('homeGoalsList').innerHTML = GOALS.map((g,i)=>{
+    const el = document.getElementById('homeGoalsList');
+    if(!GOALS.length){
+      el.innerHTML = '<div style="padding:14px 0;text-align:center;">'+
+        '<div class="label-sec" style="margin-bottom:10px;">NO GOALS YET</div>'+
+        '<button class="chip active" onclick="goTab(\'goals\')" style="border-radius:8px;">+ ADD A GOAL</button>'+
+        '</div>';
+      return;
+    }
+    el.innerHTML = GOALS.map((g,i)=>{
       return '<div style="padding:11px 0;'+(i<GOALS.length-1?'border-bottom:1px solid var(--border-soft);':'')+'cursor:pointer;" onclick="openGoal(\''+g.id+'\')">'+
         '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:6px;"><span>'+g.name+'</span><span class="mono">'+g.pct.toFixed(0)+'%</span></div>'+
         '<div class="bar thin"><div class="bar-fill positive" style="width:'+g.pct+'%;"></div></div>'+
@@ -1089,6 +1169,16 @@
   /* ---------- habit grid (Habits screen) ---------- */
   function renderGrid(){
     const table = document.getElementById('habitGridTable');
+    const emptyState = document.getElementById('habitGridEmpty');
+    if(!HABITS.length){
+      table.innerHTML = '';
+      table.parentElement.style.display = 'none';
+      emptyState.style.display = 'block';
+      return;
+    }
+    table.parentElement.style.display = '';
+    emptyState.style.display = 'none';
+
     let head = '<tr><th></th>';
     for(let i=0;i<HIST_DAYS;i++){
       const dayNum = new Date(now.getTime() - (HIST_DAYS-1-i)*86400000).getDate();
@@ -1109,7 +1199,7 @@
   function renderGridWeekly(base){
     const totalPossible = HABITS.length*7;
     const done = HABITS.reduce((s,h)=> s + last7(h).filter(v=>v==='done').length,0);
-    const pct = Math.round(done/totalPossible*100);
+    const pct = totalPossible ? Math.round(done/totalPossible*100) : 0;
     document.getElementById('gridWeekPct').textContent = pct+'%';
     document.getElementById('gridWeekBar').style.width = pct+'%';
     document.getElementById('gridWeekFrac').textContent = done+' / '+totalPossible;
@@ -1125,17 +1215,20 @@
 
   /* ---------- goals screen ---------- */
   function renderGoalsList(){
-    document.getElementById('goalsList').innerHTML = GOALS.map(g=>{
-      const daysLeft = Math.max(0, Math.ceil((new Date(g.deadline)-now)/86400000));
-      const assoc = g.extraHabits.map(a=>'<div class="assoc-habit"><span>'+a.name+'</span><span>'+a.pct+'%</span></div>').join('');
-      return '<div class="card goal-card" onclick="openGoal(\''+g.id+'\')">'+
-        '<div class="goal-top"><span class="goal-name">'+g.name+'</span><span class="delta pos">+'+g.weekDelta+'%</span></div>'+
-        '<div class="goal-pct mono">'+g.pct.toFixed(1)+'%</div>'+
-        '<div class="bar"><div class="bar-fill positive" style="width:'+g.pct+'%;"></div></div>'+
-        '<div class="goal-meta"><span class="label-sec">'+daysLeft+' DAYS LEFT</span><span class="label-sec">THIS WEEK</span></div>'+
-        '<hr class="rule">'+assoc+
-        '</div>';
-    }).join('');
+    const el = document.getElementById('goalsList');
+    el.innerHTML = !GOALS.length
+      ? '<div class="card" style="text-align:center;padding:22px 0;"><div class="label-sec">NO GOALS YET — CREATE ONE BELOW</div></div>'
+      : GOALS.map(g=>{
+        const daysLeft = Math.max(0, Math.ceil((new Date(g.deadline)-now)/86400000));
+        const assoc = g.extraHabits.map(a=>'<div class="assoc-habit"><span>'+a.name+'</span><span>'+a.pct+'%</span></div>').join('');
+        return '<div class="card goal-card" onclick="openGoal(\''+g.id+'\')">'+
+          '<div class="goal-top"><span class="goal-name">'+g.name+'</span><span class="delta '+(g.weekDelta>=0?'pos':'neg')+'">'+(g.weekDelta>=0?'+':'')+g.weekDelta+'%</span></div>'+
+          '<div class="goal-pct mono">'+g.pct.toFixed(1)+'%</div>'+
+          '<div class="bar"><div class="bar-fill positive" style="width:'+g.pct+'%;"></div></div>'+
+          '<div class="goal-meta"><span class="label-sec">'+daysLeft+' DAYS LEFT</span><span class="label-sec">THIS WEEK</span></div>'+
+          (assoc ? '<hr class="rule">'+assoc : '')+
+          '</div>';
+      }).join('');
   }
 
   window.openGoal = function(id){
@@ -1167,6 +1260,7 @@
     const name = document.getElementById('newGoalName').value.trim();
     const date = document.getElementById('newGoalDate').value;
     if(!name || !date) return;
+    if(fuzzyFind(GOALS, name)) return; // already exists — silently no-op, name is taken
     GOALS.push({
       id:'g'+Date.now(), name:name.toUpperCase(), pct:0, deadline:date, weekDelta:0,
       habits:[], habitOverrides:{}, extraHabits:[],
@@ -1177,7 +1271,46 @@
     document.getElementById('newGoalName').value='';
     document.getElementById('newGoalDate').value='';
     document.getElementById('addGoalForm').classList.remove('open');
+    saveState();
     renderGoalsList();
+    renderHomeGoals();
+  });
+
+  /* ---------- habit creation (Habits screen) ---------- */
+  document.getElementById('addHabitToggle').addEventListener('click', function(){
+    document.getElementById('addHabitForm').classList.toggle('open');
+  });
+  document.getElementById('newHabitSubmit').addEventListener('click', function(){
+    const name = document.getElementById('newHabitName').value.trim();
+    if(!name) return;
+    if(fuzzyFind(HABITS, name)) return; // already exists — silently no-op
+    const sub = document.getElementById('newHabitSub').value.trim().toUpperCase() || 'DAILY';
+    const xpRaw = parseInt(document.getElementById('newHabitXp').value, 10);
+    const xpVal = Number.isFinite(xpRaw) && xpRaw>0 ? xpRaw : 10;
+    HABITS.push({ id: slugify(name), name: name.toUpperCase(), sub, xp: xpVal, history: Array(HIST_DAYS).fill('empty') });
+    document.getElementById('newHabitName').value='';
+    document.getElementById('newHabitSub').value='';
+    document.getElementById('newHabitXp').value='';
+    document.getElementById('addHabitForm').classList.remove('open');
+    saveState();
+    renderAll(true);
+  });
+
+  /* ---------- custom reward creation (Analytics screen) ---------- */
+  document.getElementById('addRewardToggle').addEventListener('click', function(){
+    document.getElementById('addRewardForm').classList.toggle('open');
+  });
+  document.getElementById('newRewardSubmit').addEventListener('click', function(){
+    const label = document.getElementById('newRewardLabel').value.trim();
+    const xpRaw = parseInt(document.getElementById('newRewardXp').value, 10);
+    if(!label || !Number.isFinite(xpRaw) || xpRaw<=0) return;
+    CUSTOM_REWARDS.push({ xp: xpRaw, label });
+    CUSTOM_REWARDS.sort((a,b)=>a.xp-b.xp);
+    document.getElementById('newRewardLabel').value='';
+    document.getElementById('newRewardXp').value='';
+    document.getElementById('addRewardForm').classList.remove('open');
+    saveState();
+    renderRewards();
   });
 
   /* ---------- habit detail ---------- */
@@ -1203,7 +1336,7 @@
   let activeMetric = 'COMPLETION';
   function renderMetricChips(){
     const chips = document.getElementById('metricChips');
-    chips.innerHTML = Object.keys(monthlyMetrics).map(m=>{
+    chips.innerHTML = Object.keys(metricFormat).map(m=>{
       return '<button class="chip '+(m===activeMetric?'active':'')+'" onclick="setMetric(\''+m+'\')">'+m+'</button>';
     }).join('');
   }
@@ -1213,36 +1346,55 @@
     renderMonthly();
   };
   function renderMonthly(){
-    const data = monthlyMetrics[activeMetric];
+    const metrics = computeMonthlyMetrics();
+    const data = metrics[activeMetric];
     const last = data[data.length-1], first = data[0];
     document.getElementById('monthlyHead').textContent = metricFormat[activeMetric](last);
     document.getElementById('monthlyLabel').textContent = 'MONTHLY '+activeMetric;
     const delta = last-first;
     const dEl = document.getElementById('monthlyDelta');
     const pctDelta = first!==0 ? (delta/Math.abs(first)*100) : 0;
-    dEl.textContent = (delta>=0?'+':'')+pctDelta.toFixed(1)+'%';
-    dEl.className = 'delta '+(delta>=0?'pos':'neg');
+    dEl.textContent = (delta>=0?'+':delta<0?'':'')+(delta===0?'—':(delta>0?'+':'')+pctDelta.toFixed(1)+'%');
+    dEl.className = 'delta '+(delta>0?'pos':delta<0?'neg':'flat');
     document.getElementById('monthlyChart').innerHTML = lineChart(data,{h:120,color:delta>=0?COLORS.positive:COLORS.negative});
   }
 
   function renderStreaks(){
+    const el = document.getElementById('streakGrid');
+    if(!HABITS.length){
+      el.innerHTML = '<div class="card" style="grid-column:1/-1;text-align:center;padding:18px 0;"><div class="label-sec">NO HABITS YET</div></div>';
+      return;
+    }
     const top = [...HABITS].sort((a,b)=>currentStreak(b)-currentStreak(a)).slice(0,4);
-    document.getElementById('streakGrid').innerHTML = top.map(h=>{
+    el.innerHTML = top.map(h=>{
       return '<div class="stat-mini"><div class="label-sec" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+h.name+'</div>'+
         '<div class="v" style="color:'+COLORS.positive+';">'+currentStreak(h)+'D</div>'+
         '<div class="label-sec" style="margin-top:2px;">BEST '+bestStreak(h)+'D</div></div>';
     }).join('');
   }
 
-  let activeHeatHabit = HABITS[1].id;
+  let activeHeatHabit = HABITS.length ? HABITS[0].id : null;
   function renderHeatmapChips(){
-    document.getElementById('heatmapChips').innerHTML = HABITS.map(h=>{
+    const chips = document.getElementById('heatmapChips');
+    if(!HABITS.length){ chips.innerHTML = ''; return; }
+    if(!HABITS.some(h=>h.id===activeHeatHabit)) activeHeatHabit = HABITS[0].id;
+    chips.innerHTML = HABITS.map(h=>{
       return '<button class="chip '+(h.id===activeHeatHabit?'active':'')+'" onclick="setHeatHabit(\''+h.id+'\')">'+h.name+'</button>';
     }).join('');
   }
   window.setHeatHabit = function(id){ activeHeatHabit = id; renderHeatmapChips(); renderHeatmap(); };
   function renderHeatmap(){
+    const emptyState = document.getElementById('heatmapEmpty');
+    const card = document.getElementById('heatmapCard');
+    if(!HABITS.length || !activeHeatHabit){
+      emptyState.style.display = 'block';
+      card.style.display = 'none';
+      return;
+    }
+    emptyState.style.display = 'none';
+    card.style.display = '';
     const h = HABITS.find(x=>x.id===activeHeatHabit);
+    if(!h){ renderHeatmapChips(); renderHeatmap(); return; }
     document.getElementById('heatStreak').textContent = currentStreak(h)+'D';
     document.getElementById('heatBest').textContent = bestStreak(h)+'D';
     document.getElementById('heatCompletion').textContent = completionPct(h,30).toFixed(1)+'%';
@@ -1254,11 +1406,10 @@
   }
 
   function renderRewards(){
-    const lifetime = 3840 + Math.round(xpToday*0.6);
-    document.getElementById('lifetimeXp').textContent = lifetime.toLocaleString();
+    document.getElementById('lifetimeXp').textContent = lifetimeXp.toLocaleString();
     const tiers = [100,250,500,1000,2000,5000];
     document.getElementById('rewardTiers').innerHTML = tiers.map(t=>{
-      const unlocked = lifetime>=t;
+      const unlocked = lifetimeXp>=t;
       return '<div class="reward-row"><span class="reward-xp">'+t.toLocaleString()+' XP</span>'+
         '<div class="reward-status '+(unlocked?'unlocked':'locked')+'">'+
         (unlocked
@@ -1266,12 +1417,11 @@
           : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="10.5" width="14" height="9" rx="1.6"/><path d="M8 10.5V7.5a4 4 0 018 0v3" stroke-linecap="round"/></svg>')+
         '</div></div>';
     }).join('');
-    const customs = [{xp:2000,label:'Movie night'},{xp:5000,label:'New book'}];
-    document.getElementById('customRewards').innerHTML = customs.map(c=>{
-      const pct = Math.min(100, lifetime/c.xp*100);
+    document.getElementById('customRewards').innerHTML = (CUSTOM_REWARDS.length ? CUSTOM_REWARDS.map(c=>{
+      const pct = Math.min(100, lifetimeXp/c.xp*100);
       return '<div class="custom-reward"><div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;"><span>"'+c.label+'"</span><span class="mono label-sec">'+c.xp.toLocaleString()+' XP</span></div>'+
         '<div class="bar" style="margin-top:8px;"><div class="bar-fill '+(pct>=100?'positive':'accent')+'" style="width:'+pct+'%;"></div></div></div>';
-    }).join('');
+    }).join('') : '<div class="label-sec" style="padding:6px 0;">No personal rewards yet — add one below.</div>');
   }
 
   /* ---------- AI insight toggle ---------- */
@@ -1497,6 +1647,7 @@
     setToday(h, done);
     xp += done ? h.xp : -h.xp;
     xpToday += done ? h.xp : -h.xp;
+    if(done) lifetimeXp += h.xp; // lifetime total only ever grows — it's an achievement count, not a balance
     if(xp >= xpReq(level)){ xp -= xpReq(level); level += 1; }
     if(xp < 0 && level>1){ level -=1; xp += xpReq(level); }
     return true;
@@ -1517,6 +1668,7 @@
       document.body.appendChild(toast);
       setTimeout(()=>toast.remove(), 820);
     }
+    saveState();
     renderAll(true);
   };
 
@@ -1600,6 +1752,7 @@
       const result = handler(action.arguments || {});
       lines.push(result || ('Couldn\'t complete "'+action.name+'" — target not found in your data.'));
     }
+    saveState();
     return lines;
   }
 
@@ -1628,6 +1781,7 @@
     renderAIConnStatus();
   }
 
+  loadState();
   renderAll();
 })();
 </script>
