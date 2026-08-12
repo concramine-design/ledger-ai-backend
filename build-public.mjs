@@ -14,11 +14,11 @@ const head = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>LEDGER — Productivity Terminal</title>
-<meta name="description" content="A dark, data-dense habit tracker with XP, streaks, goals-as-portfolios, and an AI productivity analyst.">
-<meta name="theme-color" content="#050505">
+<meta name="description" content="A pastel, data-dense habit tracker with XP, streaks, goals-as-portfolios, and an AI productivity analyst.">
+<meta name="theme-color" content="#F3EFF8">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="LEDGER">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/icons/favicon-32.png" sizes="32x32">
