@@ -1,0 +1,4 @@
+# Les scripts Windows gardent leurs fins de ligne CRLF telles quelles.
+*.bat -text
+*.ps1 -text
+*.ico binary
