@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from ..config import get_config
 from ..db import get_db
 from ..models import Chapter, Lesson, LessonFile, Subject
-from ..services import parcours
+from ..services import parcours, srs
 from ..services.generation.generators import IMAGE_EXT
 from ..services.generation.worker import enqueue_initial, retry_lesson
 from ..services.views import exam_view, generation_status, lesson_view, next_exam, step_ready, subject_available, subject_view
@@ -168,7 +168,7 @@ class SourceIn(BaseModel):
 def replace_source(lesson_id: int, body: SourceIn, db: Session = Depends(get_db)) -> dict:
     """Corrige le texte lu (par exemple après une photo mal lue) : tout est régénéré."""
     lesson = get_lesson(db, lesson_id)
-    for collection in (lesson.jobs, lesson.artifacts, lesson.sets, lesson.progress, lesson.messages):
+    for collection in (lesson.jobs, lesson.artifacts, lesson.sets, lesson.progress, lesson.messages, lesson.mistakes, lesson.reviews):
         collection.clear()
     db.flush()
     lesson.raw_text = body.text.strip()
@@ -192,9 +192,20 @@ def next_step(db: Session = Depends(get_db)) -> dict:
     ]
     if not lessons:
         return {"kind": "import"}
+
+    # D'abord ce qui est à revoir aujourd'hui : c'est court, et c'est ce qui fixe la mémoire.
+    plan = srs.due_today(db)
+    if plan["items"]:
+        from .reviews import item_view, session_size
+
+        items = [item_view(db, i) for i in plan["items"]]
+        subjects = list(dict.fromkeys(i["lesson"]["subject"]["name"] for i in items))
+        return {"kind": "review", "size": session_size(items), "subjects": subjects, "lessons": len({i["lesson"]["id"] for i in items})}
+
     todo = [lesson for lesson in lessons if lesson.mastered_at is None]
     if not todo:
-        return {"kind": "done", "mastered": len(lessons)}
+        upcoming = next((d for d in srs.upcoming(db, days=60) if d["count"]), None)
+        return {"kind": "done", "mastered": len(lessons), "next_review": upcoming["date"] if upcoming else None}
 
     def urgency(lesson: Lesson) -> tuple:
         exam = next_exam(db, lesson.subject.id)

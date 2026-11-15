@@ -72,6 +72,18 @@ class Piege(Tolerant):
     conseil: str = ""
 
 
+class Mot(Tolerant):
+    mot: str
+    sens: str
+    exemple: str = ""
+
+
+class Auteur(Tolerant):
+    nom: str
+    these: str
+    argument: str = ""
+
+
 class Summary(Tolerant):
     titre: str = ""
     definitions: list[Definition] = []
@@ -79,19 +91,33 @@ class Summary(Tolerant):
     methodes: list[Methode] = []
     pieges: list[Piege] = []
     a_savoir_par_coeur: list[str] = []
+    vocabulaire: list[Mot] = []  # langues
+    auteurs: list[Auteur] = []  # philosophie
 
     _lists = field_validator("a_savoir_par_coeur", mode="before")(_as_list)
 
     @model_validator(mode="after")
     def _not_empty(self) -> "Summary":
-        if not (self.definitions or self.formules or self.methodes):
+        if not (self.definitions or self.formules or self.methodes or self.vocabulaire or self.auteurs):
             raise ValueError("résumé vide")
         return self
 
+    def cards(self) -> list[dict[str, str]]:
+        """Cartes mémoire tirées de la fiche : définitions, vocabulaire, auteurs."""
+        cards = [{"recto": d.terme, "verso": d.definition} for d in self.definitions]
+        cards += [{"recto": m.mot, "verso": m.sens + (f"\n\n*{m.exemple}*" if m.exemple else "")} for m in self.vocabulaire]
+        cards += [{"recto": a.nom, "verso": a.these + (f"\n\n{a.argument}" if a.argument else "")} for a in self.auteurs]
+        return [c for c in cards if c["recto"].strip() and c["verso"].strip()]
+
 
 # -- Questions --------------------------------------------------------------
+class SchemaElement(Tolerant):
+    nom: str = Field(min_length=1)
+    role: str = ""
+
+
 class QuestionOut(Tolerant):
-    type: Literal["qcm", "ouverte"]
+    type: Literal["qcm", "ouverte", "schema"]
     enonce: str = Field(min_length=3)
     choix: list[str] = []
     bonne_reponse: Optional[int] = None
@@ -99,6 +125,9 @@ class QuestionOut(Tolerant):
     elements_attendus: list[str] = []
     explication: str = ""
     notion: str = ""
+    # Schéma à légender : des cases numérotées dont il faut retrouver le nom.
+    disposition: Literal["chaine", "cycle", "ensemble"] = "ensemble"
+    elements: list[SchemaElement] = []
 
     _lists = field_validator("choix", "elements_attendus", mode="before")(_as_list)
 
@@ -109,7 +138,12 @@ class QuestionOut(Tolerant):
             return data
         data = dict(data)
         kind = str(data.get("type", "")).strip().lower()
-        data["type"] = "qcm" if kind in ("qcm", "mcq", "choix multiple", "choix_multiple") else "ouverte"
+        if kind in ("schema", "schéma"):
+            data["type"] = "schema"
+            if data.get("disposition") not in ("chaine", "cycle", "ensemble"):
+                data["disposition"] = "ensemble"
+        else:
+            data["type"] = "qcm" if kind in ("qcm", "mcq", "choix multiple", "choix_multiple") else "ouverte"
         answer = data.get("bonne_reponse")
         choices = data.get("choix") or []
         if isinstance(answer, str):
@@ -126,6 +160,13 @@ class QuestionOut(Tolerant):
 
     @model_validator(mode="after")
     def _coherent(self) -> "QuestionOut":
+        if self.type == "schema":
+            names = [e.nom.strip().lower() for e in self.elements]
+            if not 3 <= len(names) <= 8 or len(set(names)) != len(names):
+                raise ValueError("schéma : 3 à 8 éléments aux noms distincts")
+            self.choix, self.bonne_reponse = [], None
+            return self
+        self.elements = []
         if self.type == "qcm":
             if len(self.choix) < 2 or self.bonne_reponse is None or not 0 <= self.bonne_reponse < len(self.choix):
                 raise ValueError("QCM sans bonne réponse valide")
@@ -143,6 +184,9 @@ class QuestionOut(Tolerant):
 class ExerciseOut(Tolerant):
     titre: str = ""
     enonce: str = Field(min_length=10)
+    document: str = ""  # texte, tableau ou description d'expérience à analyser
+    mode: Literal["elements", "redaction"] = "elements"
+    criteres: list[str] = []  # rédaction : critères de notation
     type_exercice: str = ""
     elements_attendus: list[str] = Field(min_length=1)
     reponse_finale: str = ""
@@ -150,7 +194,12 @@ class ExerciseOut(Tolerant):
     correction_etapes: list[str] = Field(min_length=1)
     notion: str = ""
 
-    _lists = field_validator("elements_attendus", "indices", "correction_etapes", mode="before")(_as_list)
+    _lists = field_validator("elements_attendus", "indices", "correction_etapes", "criteres", mode="before")(_as_list)
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def _mode(cls, value: Any) -> str:
+        return "redaction" if str(value).strip().lower().startswith("r") else "elements"
 
 
 # -- Correction et ré-explication -------------------------------------------
@@ -183,6 +232,69 @@ class Evaluation(Tolerant):
     def score(self) -> float:
         weights = {"ok": 1.0, "partiel": 0.5, "absent": 0.0}
         return sum(weights[e.etat] for e in self.elements) / len(self.elements)
+
+
+class Critere(Tolerant):
+    nom: str = ""
+    note: float = Field(default=0, ge=0, le=4)
+    commentaire: str = ""
+
+    @field_validator("note", mode="before")
+    @classmethod
+    def _note(cls, value: Any) -> float:
+        try:
+            return max(0.0, min(4.0, float(str(value).replace(",", ".").split("/")[0])))
+        except ValueError:
+            return 0.0
+
+
+class Faute(Tolerant):
+    extrait: str = ""
+    type: str = ""
+    explication: str = Field(min_length=1)
+    piste: str = ""
+
+
+class WritingEvaluation(Tolerant):
+    """Correction d'une rédaction : notes par critère et fautes expliquées, sans réécriture."""
+
+    criteres: list[Critere] = Field(min_length=1)
+    fautes: list[Faute] = []
+    points_forts: str = ""
+    priorite: str = ""
+
+    @property
+    def score(self) -> float:
+        return sum(c.note for c in self.criteres) / (4 * len(self.criteres))
+
+
+class MethodType(Tolerant):
+    nom: str = Field(min_length=1)
+    reconnaitre: str = ""
+    etapes: list[str] = Field(min_length=1)
+    erreur_classique: str = ""
+    exemple: str = ""
+
+    _lists = field_validator("etapes", mode="before")(_as_list)
+
+
+class Methods(Tolerant):
+    types: list[MethodType] = Field(min_length=1)
+
+
+class VideoQueries(Tolerant):
+    requetes: list[str] = Field(min_length=1)
+
+    _lists = field_validator("requetes", mode="before")(_as_list)
+
+
+class VideoChoice(Tolerant):
+    id: str
+    raison: str = ""
+
+
+class VideoRank(Tolerant):
+    selection: list[VideoChoice] = Field(min_length=1)
 
 
 class ReexplainPoint(Tolerant):

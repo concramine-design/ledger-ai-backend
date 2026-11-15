@@ -33,6 +33,8 @@ echo Installation des composants. Cela prend quelques minutes la premiere fois..
 if errorlevel 1 goto :fail
 rem Photos d'iPhone au format HEIC : facultatif, on continue si cela echoue.
 ".venv\Scripts\python.exe" -m pip install pillow-heif >nul 2>&1
+rem Sous-titres des videos YouTube : facultatif aussi.
+".venv\Scripts\python.exe" -m pip install youtube-transcript-api >nul 2>&1
 
 rem --- 3. Fichier .env avec les cles ------------------------------
 if exist ".env" goto :shortcut

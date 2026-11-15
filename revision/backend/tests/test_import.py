@@ -42,8 +42,8 @@ def test_pdf_with_text_layer(client, mock_llm):
     assert resp.status_code == 200, resp.text
     lesson = resp.json()
     assert lesson["source_type"] == "pdf" and lesson["has_text"] is False
-    assert lesson["generation"]["total"] == 8 and lesson["generation"]["current"] == "Lecture du document"
-    assert run_jobs() == 8
+    assert lesson["generation"]["total"] == 10 and lesson["generation"]["current"] == "Lecture du document"
+    assert run_jobs() == 10
     assert "ocr" not in mock_llm.calls, "un PDF avec texte ne passe pas par l'OCR"
     source = client.get(f"/api/lessons/{lesson['id']}/source").json()["text"]
     assert "ensemble de définition" in source.replace("\n", " ")
@@ -83,8 +83,9 @@ def test_rejected_imports(client):
     assert client.post("/api/lessons", data={**base, "text": LESSON_TEXT, "title": " "}).status_code == 422
     bad = _post(client, [("files", ("notes.docx", b"xx", "application/octet-stream"))])
     assert bad.status_code == 422 and "PDF" in bad.json()["detail"]
-    svt = client.post("/api/lessons", data={**base, "subject_id": subject_id(client, "svt"), "text": LESSON_TEXT})
-    assert svt.status_code == 422 and "prochaine version" in svt.json()["detail"]
+    off = subject_id(client, "svt")
+    client.patch(f"/api/subjects/{off}", json={"enabled": False})
+    assert client.post("/api/lessons", data={**base, "subject_id": off, "text": LESSON_TEXT}).status_code == 404
 
 
 def test_unreadable_file_fails_with_a_clear_message(client):

@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from .generation import prompts
-from .generation.content import Evaluation, validate
+from .generation.content import Evaluation, WritingEvaluation, validate
 from .llm import LLMRequest, get_llm
 
 
@@ -60,3 +60,39 @@ def grade_open(ctx: prompts.Ctx, data: dict[str, Any], answer: str, spoiler_allo
         "conseil": ev.conseil,
     }
     return score, feedback
+
+
+def grade_schema(data: dict[str, Any], labels: list[str]) -> tuple[float, dict[str, Any]]:
+    """Schéma à légender : chaque case est juste ou fausse, sans appel à l'IA."""
+    names = [e.get("nom", "") for e in data.get("elements", [])]
+    given = (labels + [""] * len(names))[: len(names)]
+    correct = [g.strip().lower() == n.strip().lower() for g, n in zip(given, names)]
+    return sum(correct) / max(1, len(names)), {"cases": correct}
+
+
+def grade_writing(ctx: prompts.Ctx, data: dict[str, Any], answer: str) -> tuple[float, dict[str, Any]]:
+    """Rédaction (production écrite, plan, argumentation) : notes par critère et fautes expliquées, sans réécriture."""
+    if len(answer.split()) < 5:
+        return 0.0, {
+            "mode": "redaction",
+            "criteres": [{"nom": c, "note": 0, "commentaire": ""} for c in data.get("criteres", [])],
+            "fautes": [],
+            "points_justes": "",
+            "conseil": "Ta copie est trop courte pour être corrigée. Lance-toi : écris au moins quelques phrases.",
+        }
+    req = LLMRequest(
+        task="evaluate_writing",
+        system=prompts.system(ctx),
+        messages=[{"role": "user", "content": prompts.evaluate_writing(data, answer)}],
+        temperature=0.1,
+        payload={"answer": answer, "criteres": data.get("criteres", [])},
+    )
+    ev: WritingEvaluation = validate(WritingEvaluation, get_llm().generate_json(req))
+    feedback = {
+        "mode": "redaction",
+        "criteres": [c.model_dump() for c in ev.criteres],
+        "fautes": [f.model_dump() for f in ev.fautes[:8]],
+        "points_justes": ev.points_forts,
+        "conseil": ev.priorite,
+    }
+    return ev.score, feedback

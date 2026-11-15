@@ -135,11 +135,86 @@ class MockProvider(Provider):
         return self._questions(p, 4, 2)
 
     def _quiz(self, p: dict[str, Any]) -> dict[str, Any]:
-        return self._questions(p, 6, 2)
+        out = self._questions(p, 6, 2)
+        if p.get("code") == "svt":
+            s = sentences(p.get("text", ""))
+            out["questions"].append(
+                {
+                    "type": "schema",
+                    "enonce": "Complète la légende de ce schéma.",
+                    "disposition": "chaine",
+                    "elements": [{"nom": f"Étape {i + 1}", "role": s[i % len(s)][:60]} for i in range(4)],
+                    "explication": "Les étapes se suivent dans l'ordre de la leçon.",
+                    "notion": (p.get("notions") or ["Notion générale"])[0],
+                }
+            )
+        return out
+
+    def _review_questions(self, p: dict[str, Any]) -> dict[str, Any]:
+        return self._questions(p, 3, 1)
+
+    def _error_variant(self, p: dict[str, Any]) -> dict[str, Any]:
+        expected = (p.get("mistake") or {}).get("expected") or "la règle de la leçon"
+        return {
+            "type": "ouverte",
+            "enonce": f"Autrement dit ({int(p.get('round', 0)) + 1}) : explique avec tes mots « {expected} »",
+            "reponse_modele": expected,
+            "elements_attendus": [expected],
+            "explication": f"L'idée à retenir : {expected}",
+            "notion": (p.get("mistake") or {}).get("notion", ""),
+        }
+
+    def _methods(self, p: dict[str, Any]) -> dict[str, Any]:
+        types = [t for t in p.get("types", []) if t] or ["Application du cours"]
+        return {
+            "types": [
+                {
+                    "nom": t,
+                    "reconnaitre": "L'énoncé demande d'appliquer directement une règle du cours.",
+                    "etapes": ["Repérer la règle.", "L'appliquer aux données.", "Vérifier le résultat."],
+                    "erreur_classique": "Oublier une condition de la règle.",
+                    "exemple": "Par exemple : $2 + 3 = 5$.",
+                }
+                for t in types
+            ]
+        }
+
+    def _video_queries(self, p: dict[str, Any]) -> dict[str, Any]:
+        return {"requetes": [f"{p.get('title', 'leçon')} tronc commun", f"{p.get('title', 'leçon')} cours"]}
+
+    def _video_rank(self, p: dict[str, Any]) -> dict[str, Any]:
+        ids = list(p.get("candidates", []))[:3]
+        return {"selection": [{"id": i, "raison": f"Vidéo n°{n + 1} : elle traite la leçon au bon niveau."} for n, i in enumerate(ids)]}
+
+    def _evaluate_writing(self, p: dict[str, Any]) -> dict[str, Any]:
+        """Règle simulée : une copie d'au moins 40 mots est jugée bonne."""
+        words = len(str(p.get("answer", "")).split())
+        note = 3 if words >= 40 else 1
+        criteria = p.get("criteres") or ["Respect de la consigne", "Langue"]
+        return {
+            "criteres": [{"nom": c, "note": note, "commentaire": "Commentaire simulé."} for c in criteria],
+            "fautes": [
+                {
+                    "extrait": " ".join(str(p.get("answer", "")).split()[:4]),
+                    "type": "accord",
+                    "explication": "Vérifie l'accord entre le sujet et le verbe.",
+                    "piste": "Quel est le sujet de cette phrase ?",
+                }
+            ],
+            "points_forts": "Tes idées se suivent dans un ordre logique." if note == 3 else "",
+            "priorite": "Développe davantage tes idées." if note == 1 else "Relis-toi pour les accords.",
+        }
 
     def _summary(self, p: dict[str, Any]) -> dict[str, Any]:
         s = sentences(p.get("text", ""))
+        kind = p.get("kind", "sciences")
+        extra: dict[str, Any] = {"vocabulaire": [], "auteurs": []}
+        if kind == "langue":
+            extra["vocabulaire"] = [{"mot": f"mot {i + 1}", "sens": x[:50], "exemple": x} for i, x in enumerate(s[:4])]
+        if kind == "philo":
+            extra["auteurs"] = [{"nom": "Auteur du cours", "these": s[0], "argument": s[1]}]
         return {
+            **extra,
             "titre": p.get("title", "Leçon"),
             "definitions": [{"terme": f"Terme {i + 1}", "definition": x} for i, x in enumerate(s[:3])],
             "formules": [
@@ -150,11 +225,26 @@ class MockProvider(Provider):
             "a_savoir_par_coeur": s[3:5],
         }
 
-    def _exercise(self, sent: str, level: int, n: int, notion: str) -> dict[str, Any]:
+    def _exercise(self, sent: str, level: int, n: int, notion: str, redaction: bool = False, code: str = "") -> dict[str, Any]:
+        if redaction:
+            return {
+                "titre": f"Sujet {n}",
+                "enonce": f"(Niveau {level}) Rédige un paragraphe de 8 à 12 lignes à partir de cette idée : « {sent} »",
+                "mode": "redaction",
+                "criteres": ["Respect de la consigne", "Organisation des idées", "Correction de la langue", "Richesse du contenu"],
+                "type_exercice": "Production écrite",
+                "elements_attendus": ["Une idée principale", "Des exemples", "Une conclusion"],
+                "reponse_finale": "",
+                "indices": ["Pars de ton expérience.", "Annonce ton idée, développe, conclus.", "Commence par : « À mon avis… »"],
+                "correction_etapes": ["Annoncer l'idée.", "Donner deux arguments.", "Conclure."],
+                "notion": notion,
+            }
+        document = f"| Mesure | Valeur |\n| --- | --- |\n| A | {n} |\n| B | {n + 2} |" if code == "svt" and level >= 2 else ""
         return {
             "titre": f"Exercice {n}",
             "enonce": f"(Niveau {level}) Applique la règle suivante et rédige ta réponse : « {sent} »",
-            "type_exercice": "Application du cours",
+            "document": document,
+            "type_exercice": "Analyse de documents" if document else "Application du cours",
             "elements_attendus": [sent],
             "reponse_finale": sent,
             "indices": ["Relis la partie du cours concernée.", "Repère la règle à appliquer.", f"Commence par : {sent[:25]}…"],
@@ -166,9 +256,11 @@ class MockProvider(Provider):
         s = sentences(p.get("text", ""))
         level = int(p.get("level", 1))
         notions = p.get("notions") or ["Notion générale"]
+        redaction = bool(p.get("redaction"))
         return {
             "exercices": [
-                self._exercise(s[(i + level) % len(s)], level, i + 1, notions[i % len(notions)]) for i in range(3)
+                self._exercise(s[(i + level) % len(s)], level, i + 1, notions[i % len(notions)], redaction, p.get("code", ""))
+                for i in range(2 if redaction else 3)
             ]
         }
 

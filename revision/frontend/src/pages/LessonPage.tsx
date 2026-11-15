@@ -149,7 +149,17 @@ export default function LessonPage() {
         </li>
       </ol>
 
-      <div className="row end">
+      <div className="row end wrap">
+        {data.has_methods && (
+          <Link className="link-btn" to={`/chapitre/${data.chapter.id}/methodes`}>
+            Fiche « méthodes types »
+          </Link>
+        )}
+        {!!data.open_mistakes && (
+          <Link className="link-btn" to="/erreurs">
+            {data.open_mistakes} erreur{data.open_mistakes > 1 ? "s" : ""} au carnet
+          </Link>
+        )}
         {data.has_text && (
           <button className="link-btn" onClick={() => setShowSource(true)}>
             Voir le texte de la leçon

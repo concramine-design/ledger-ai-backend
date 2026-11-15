@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { api, type NextStep } from "../api";
-import { daysLabel } from "../components/Editors";
+import { daysLabel, formatDate } from "../components/Editors";
 import { GenerationNotice, Icon, Notice, Spinner, SubjectChip } from "../components/Ui";
 import { useLoad, usePoll } from "../hooks";
 
@@ -31,6 +31,31 @@ export default function Home() {
     );
   }
 
+  if (data.kind === "review") {
+    const { size } = data;
+    const parts = [
+      size.questions ? `${size.questions} question${size.questions > 1 ? "s" : ""}` : "",
+      size.cards ? `${size.cards} carte${size.cards > 1 ? "s" : ""} mémoire` : "",
+    ].filter(Boolean);
+    return (
+      <section className="next card">
+        <p className="eyebrow">Ta prochaine étape</p>
+        <p className="muted">{data.subjects.join(" · ")}</p>
+        <h1>Révision du jour</h1>
+        <p className="next-desc">{parts.join(" et ")} à revoir aujourd'hui, pour ne pas oublier.</p>
+        <p className="muted row center-row">
+          <Icon name="clock" size={16} /> environ {size.minutes} min
+        </p>
+        <Link className="btn btn-big" to="/revision">
+          Continuer <Icon name="arrow" />
+        </Link>
+        <Link className="link-btn" to="/planning">
+          Voir mon planning
+        </Link>
+      </section>
+    );
+  }
+
   if (data.kind === "done") {
     return (
       <section className="next card">
@@ -38,6 +63,7 @@ export default function Home() {
         <h1>Tout est maîtrisé</h1>
         <p className="muted">
           Tu as maîtrisé {data.mastered} leçon{data.mastered > 1 ? "s" : ""}. Importe la leçon suivante pour continuer.
+          {data.next_review && ` Prochain rappel : ${formatDate(data.next_review)}.`}
         </p>
         <Link className="btn btn-big" to="/importer">
           Importer une leçon <Icon name="arrow" />

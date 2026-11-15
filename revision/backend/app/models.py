@@ -78,6 +78,8 @@ class Lesson(Base):
     progress: Mapped[list["StepProgress"]] = relationship(cascade="all, delete-orphan")
     messages: Mapped[list["ChatMessage"]] = relationship(cascade="all, delete-orphan", order_by="ChatMessage.id")
     reports: Mapped[list["Report"]] = relationship(cascade="all, delete-orphan")
+    mistakes: Mapped[list["Mistake"]] = relationship(cascade="all, delete-orphan", back_populates="lesson")
+    reviews: Mapped[list["ReviewItem"]] = relationship(cascade="all, delete-orphan", back_populates="lesson")
 
     @property
     def subject(self) -> Subject:
@@ -126,12 +128,12 @@ class Artifact(Base):
 
 
 class QuestionSet(Base):
-    """Un mini-test, un quiz (une version = un passage) ou un niveau d'exercices."""
+    """Un mini-test, un quiz (une version = un passage), un niveau d'exercices ou un rappel (review)."""
 
     __tablename__ = "question_sets"
     id: Mapped[int] = mapped_column(primary_key=True)
     lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id"))
-    kind: Mapped[str] = mapped_column(String(16))  # minitest | quiz | exercises
+    kind: Mapped[str] = mapped_column(String(16))  # minitest | quiz | exercises | review
     level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     state: Mapped[str] = mapped_column(String(12), default="active")  # active | passed | failed
@@ -155,6 +157,7 @@ class Question(Base):
     data: Mapped[dict] = mapped_column(JSON)
     parent_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     revealed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    hints_used: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=0)
 
     qset: Mapped[QuestionSet] = relationship(back_populates="questions")
     attempts: Mapped[list["Attempt"]] = relationship(cascade="all, delete-orphan", order_by="Attempt.id")
@@ -203,3 +206,41 @@ class Report(Base):
     excerpt: Mapped[str] = mapped_column(Text, default="")
     comment: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Mistake(Base):
+    """Carnet d'erreurs : une ligne par question ratée, reposée plus tard sous une autre forme."""
+
+    __tablename__ = "mistakes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id"))
+    question_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    source: Mapped[str] = mapped_column(String(12))  # minitest | quiz | exercice | rappel
+    notion: Mapped[str] = mapped_column(String(200), default="")
+    enonce: Mapped[str] = mapped_column(Text, default="")
+    given: Mapped[str] = mapped_column(Text, default="")
+    expected: Mapped[str] = mapped_column(Text, default="")
+    successes: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    lesson: Mapped[Lesson] = relationship(back_populates="mistakes")
+
+
+class ReviewItem(Base):
+    """Un élément à revoir en répétition espacée : rappel de leçon, erreur à reposer, ou carte mémoire."""
+
+    __tablename__ = "review_items"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id"))
+    kind: Mapped[str] = mapped_column(String(8))  # lesson | error | card
+    ref_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # erreur d'origine
+    set_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # questions prêtes pour le prochain rappel
+    data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # carte : recto / verso
+    stage: Mapped[int] = mapped_column(Integer, default=0)
+    due: Mapped[date] = mapped_column(Date)
+    last_reviewed: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    state: Mapped[str] = mapped_column(String(8), default="active")  # active | done
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    lesson: Mapped[Lesson] = relationship(back_populates="reviews")

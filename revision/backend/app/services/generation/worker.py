@@ -30,6 +30,10 @@ JOB_LABELS = {
     "exercises": "Exercices",
     "exercise_variant": "Nouvel exercice",
     "reexplain": "Nouvelle explication",
+    "videos": "Sélection de vidéos",
+    "methods": "Méthodes types",
+    "review_set": "Prochain rappel",
+    "error_variant": "Reprise d'une erreur",
 }
 
 _BACKOFF = [10, 20, 45, 90, 180, 300]  # secondes
@@ -63,10 +67,31 @@ def enqueue_initial(db: Session, lesson: Lesson, pasted_text: str = "") -> None:
         enqueue(db, lesson, "extract", {"pasted_text": pasted_text}, priority=0)
     enqueue(db, lesson, "explanation", priority=10, depends_on="extract")
     enqueue(db, lesson, "minitest", {"version": 1}, priority=20, depends_on="explanation")
+    enqueue(db, lesson, "videos", priority=25, depends_on="explanation")
     enqueue(db, lesson, "summary", priority=30, depends_on="explanation")
     enqueue(db, lesson, "quiz", {"version": 1}, priority=40, depends_on="explanation")
     for level in (1, 2, 3):
         enqueue(db, lesson, "exercises", {"level": level}, priority=50 + level, depends_on="explanation")
+    if lesson.subject.kind == "sciences":
+        enqueue(db, lesson, "methods", priority=58, depends_on="exercises")
+
+
+def backfill(db: Session) -> None:
+    """Au démarrage : ajoute aux leçons existantes ce qu'une version plus récente sait générer."""
+    from ...config import get_config
+
+    has_key = bool(get_config().youtube_api_key)
+    for lesson in db.query(Lesson).all():
+        kinds = {j.kind for j in lesson.jobs}
+        if "explanation" not in kinds:
+            continue
+        videos = next((a for a in lesson.artifacts if a.kind == "videos"), None)
+        pending = any(j.kind == "videos" and j.status != "done" for j in lesson.jobs)
+        retry = videos is not None and videos.content.get("status") in ("no_key", "key", "quota") and has_key
+        if not pending and ("videos" not in kinds or retry):
+            enqueue(db, lesson, "videos", priority=25, depends_on="explanation")
+        if "methods" not in kinds and lesson.subject.kind == "sciences":
+            enqueue(db, lesson, "methods", priority=58, depends_on="exercises")
 
 
 def _runnable(db: Session, job: Job) -> bool:
@@ -164,6 +189,7 @@ def recover_on_startup() -> None:
             job.status = "pending"
             job.attempts = 0
             job.next_try_at = None
+        backfill(db)
         db.commit()
 
 

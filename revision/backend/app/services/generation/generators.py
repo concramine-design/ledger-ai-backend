@@ -7,20 +7,25 @@ from typing import Any, Callable, Optional
 from sqlalchemy.orm import Session
 
 from ...config import get_config
-from ...models import Artifact, Job, Lesson, Question, QuestionSet
-from .. import ingestion
+from ...models import Artifact, Job, Lesson, Mistake, Question, QuestionSet, ReviewItem
+from .. import ingestion, youtube
 from ..llm import LLMError, LLMRequest, get_llm
 from . import prompts
 from .content import (
     ExerciseOut,
     Explanation,
+    Methods,
     QuestionOut,
     Reexplain,
     Summary,
+    VideoQueries,
+    VideoRank,
     shuffle_choices,
     validate,
     validate_items,
 )
+
+DEFAULT_CRITERIA = ["Respect de la consigne", "Organisation des idées", "Correction de la langue", "Richesse du contenu"]
 
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".heic", ".heif"}
 
@@ -53,6 +58,8 @@ def build_ctx(lesson: Lesson, with_notions: bool = True) -> prompts.Ctx:
         title=lesson.title,
         text=text,
         notions=lesson_notions(lesson) if with_notions else [],
+        kind=subject.kind,
+        code=subject.code or "",
     )
 
 
@@ -62,7 +69,7 @@ def _ask_json(task: str, ctx: prompts.Ctx, user: str, payload: dict[str, Any], t
         system=prompts.system(ctx),
         messages=[{"role": "user", "content": user}],
         temperature=temperature,
-        payload={"text": ctx.text, "title": ctx.title, "notions": ctx.notions, **payload},
+        payload={"text": ctx.text, "title": ctx.title, "notions": ctx.notions, "kind": ctx.kind, "code": ctx.code, **payload},
     )
     return get_llm().generate_json(req)
 
@@ -140,8 +147,13 @@ def _gen_test(db: Session, lesson: Lesson, job: Job, kind: str, minimum: int, ma
     ctx = build_ctx(lesson)
     prompt = prompts.minitest(ctx, avoid, focus) if kind == "minitest" else prompts.quiz(ctx, avoid, focus)
     data = _ask_json(kind, ctx, prompt, {"version": version})
-    questions = validate_items(QuestionOut, _items(data, "questions"), minimum)[:maximum]
-    if kind == "quiz" and sum(q.type == "ouverte" for q in questions) * 2 < len(questions):
+    questions = validate_items(QuestionOut, _items(data, "questions"), minimum)[: maximum + 1]
+    if ctx.code != "svt":
+        questions = [q for q in questions if q.type != "schema"]
+    classic = [q for q in questions if q.type != "schema"]
+    if len(classic) < minimum:
+        raise LLMError("bad_output", "pas assez de questions")
+    if kind == "quiz" and sum(q.type == "ouverte" for q in classic) * 2 < len(classic):
         raise LLMError("bad_output", "le quiz doit contenir une majorité de questions ouvertes")
     qset = QuestionSet(kind=kind, version=version)
     for i, q in enumerate(questions):
@@ -158,15 +170,26 @@ def gen_quiz(db: Session, lesson: Lesson, job: Job) -> None:
     _gen_test(db, lesson, job, "quiz", minimum=5, maximum=10)
 
 
+def _set_mode(ex: ExerciseOut, redaction: bool) -> None:
+    """Le mode de correction dépend du niveau et de la matière, pas de ce que l'IA a écrit."""
+    ex.mode = "redaction" if redaction else "elements"
+    if redaction and not ex.criteres:
+        ex.criteres = list(DEFAULT_CRITERIA)
+    if not redaction:
+        ex.criteres = []
+
+
 def gen_exercises(db: Session, lesson: Lesson, job: Job) -> None:
     level = int((job.params or {}).get("level", 1))
     if _sets(lesson, "exercises", level):
         return
     ctx = build_ctx(lesson)
-    data = _ask_json("exercises", ctx, prompts.exercises(ctx, level), {"level": level})
-    exercises = validate_items(ExerciseOut, _items(data, "exercices"), minimum=2)[:4]
+    redaction = prompts.is_redaction(ctx, level)
+    data = _ask_json("exercises", ctx, prompts.exercises(ctx, level), {"level": level, "redaction": redaction})
+    exercises = validate_items(ExerciseOut, _items(data, "exercices"), minimum=1 if redaction else 2)[:4]
     qset = QuestionSet(kind="exercises", level=level)
     for i, ex in enumerate(exercises):
+        _set_mode(ex, redaction)
         qset.questions.append(Question(position=i, qtype="exercice", notion=ex.notion, data=ex.model_dump()))
     lesson.sets.append(qset)
 
@@ -190,10 +213,26 @@ def gen_exercise_variant(db: Session, lesson: Lesson, job: Job) -> None:
     if isinstance(data, dict) and isinstance(data.get("exercices"), list) and data["exercices"]:
         data = data["exercices"][0]
     ex = validate(ExerciseOut, data)
+    _set_mode(ex, original.data.get("mode") == "redaction")
     position = max((q.position for q in qset.questions), default=-1) + 1
     qset.questions.append(
         Question(position=position, qtype="exercice", notion=ex.notion or original.notion, data=ex.model_dump(), parent_id=original.id)
     )
+
+
+def given_and_expected(question: Question, attempt: Any) -> tuple[str, str]:
+    """Sa réponse et la réponse attendue, en texte, quel que soit le type de question."""
+    d = question.data
+    if question.qtype == "qcm":
+        choices = d.get("choix", [])
+        index = attempt.choice_index
+        given = choices[index] if index is not None and 0 <= index < len(choices) else ""
+        return given, (choices[d.get("bonne_reponse", 0)] if choices else "")
+    if question.qtype == "schema":
+        return attempt.answer_text, " ; ".join(e.get("nom", "") for e in d.get("elements", []))
+    if question.qtype == "exercice":
+        return attempt.answer_text, d.get("reponse_finale") or " ; ".join(d.get("elements_attendus", []))
+    return attempt.answer_text, d.get("reponse_modele", "")
 
 
 def failed_items(qset: QuestionSet) -> list[dict[str, str]]:
@@ -205,12 +244,7 @@ def failed_items(qset: QuestionSet) -> list[dict[str, str]]:
             continue
         att = graded[-1]
         d = q.data
-        if q.qtype == "qcm":
-            choices = d.get("choix", [])
-            given = choices[att.choice_index] if att.choice_index is not None and att.choice_index < len(choices) else ""
-            expected = choices[d.get("bonne_reponse", 0)] if choices else ""
-        else:
-            given, expected = att.answer_text, d.get("reponse_modele", "")
+        given, expected = given_and_expected(q, att)
         items.append({"notion": q.notion, "enonce": d.get("enonce", ""), "reponse": given, "attendu": expected})
     return items
 
@@ -231,6 +265,146 @@ def gen_reexplain(db: Session, lesson: Lesson, job: Job) -> None:
     save_artifact(db, lesson, "reexplain", content.model_dump(), ref_id=set_id)
 
 
+def gen_methods(db: Session, lesson: Lesson, job: Job) -> None:
+    """Fiche « méthodes types » : reconnaître et résoudre chaque type d'exercice."""
+    types = list(
+        dict.fromkeys(
+            q.data.get("type_exercice", "") for s in lesson.sets if s.kind == "exercises" for q in s.questions
+        )
+    )
+    ctx = build_ctx(lesson)
+    data = _ask_json("methods", ctx, prompts.methods(ctx, types), {"types": types})
+    save_artifact(db, lesson, "methods", validate(Methods, data).model_dump())
+
+
+def gen_videos(db: Session, lesson: Lesson, job: Job) -> None:
+    """Cherche sur YouTube, compare les résultats et garde les 3 meilleures vidéos, avec la raison du choix."""
+    key = get_config().youtube_api_key
+    if not key:
+        save_artifact(db, lesson, "videos", {"status": "no_key", "videos": []})
+        return
+    ctx = build_ctx(lesson)
+    llm = get_llm()
+    try:
+        data = _ask_json("video_queries", ctx, prompts.video_queries(ctx), {})
+        queries = [q for q in validate(VideoQueries, data).requetes if q.strip()][:2]
+    except LLMError as exc:
+        if exc.kind != "bad_output":
+            raise
+        queries = []
+    if not queries:
+        queries = [f"{lesson.title} {lesson.chapter.title} tronc commun"]
+
+    try:
+        ids: list[str] = []
+        for query in queries:
+            for vid in youtube.search(query, ctx.language, key):
+                if vid not in ids:
+                    ids.append(vid)
+        candidates = youtube.details(ids[:20], key)
+    except youtube.YouTubeUnavailable as exc:
+        # Clé refusée ou quota du jour épuisé : on n'empêche pas l'élève d'avancer, on réessaiera au prochain démarrage.
+        save_artifact(db, lesson, "videos", {"status": exc.reason, "videos": []})
+        return
+
+    fitting = [c for c in candidates if youtube.MIN_SECONDS <= c["duration_s"] <= youtube.MAX_SECONDS] or candidates
+    fitting.sort(key=lambda c: youtube.heuristic_score(c, ctx.language), reverse=True)
+    shortlist = fitting[:8]
+    if not shortlist:
+        save_artifact(db, lesson, "videos", {"status": "none", "videos": []})
+        return
+    for cand in shortlist[:5]:
+        cand["transcript"] = youtube.transcript_excerpt(cand["id"], [ctx.language, "fr", "ar", "en"])
+
+    by_id = {c["id"]: c for c in shortlist}
+    chosen: list[tuple[dict, str]] = []
+    try:
+        req = LLMRequest(
+            task="video_rank",
+            system=prompts.system(ctx),
+            messages=[{"role": "user", "content": prompts.video_rank(ctx, shortlist)}],
+            temperature=0.1,
+            payload={"candidates": [c["id"] for c in shortlist]},
+        )
+        ranking = validate(VideoRank, llm.generate_json(req))
+        for choice in ranking.selection:
+            if choice.id in by_id and all(choice.id != c["id"] for c, _ in chosen):
+                chosen.append((by_id[choice.id], choice.raison))
+    except LLMError as exc:
+        if exc.kind != "bad_output":
+            raise
+    if not chosen:  # l'IA n'a rien rendu d'exploitable : on garde le premier tri
+        chosen = [(c, "Choisie pour son titre, sa durée et son niveau.") for c in shortlist[:3]]
+
+    videos = [
+        {
+            "id": c["id"],
+            "title": c["title"],
+            "channel": c["channel"],
+            "duration_s": c["duration_s"],
+            "raison": reason,
+            "subtitles_used": bool(c.get("transcript")),
+        }
+        for c, reason in chosen[:3]
+    ]
+    save_artifact(db, lesson, "videos", {"status": "ok", "videos": videos, "queries": queries})
+
+
+def _asked(lesson: Lesson) -> list[str]:
+    """Énoncés déjà posés sur la leçon (tests et rappels), pour ne pas les répéter."""
+    sets = sorted((s for s in lesson.sets if s.kind in ("minitest", "quiz", "review")), key=lambda s: s.id)
+    return [q.data.get("enonce", "") for s in sets for q in s.questions][-20:]
+
+
+def _new_review_set(lesson: Lesson, questions: list[QuestionOut]) -> QuestionSet:
+    version = sum(s.kind == "review" for s in lesson.sets) + 1
+    qset = QuestionSet(kind="review", version=version)
+    for i, q in enumerate(questions):
+        shuffle_choices(q, seed=lesson.id * 977 + version * 13 + i)
+        qset.questions.append(Question(position=i, qtype=q.type, notion=q.notion, data=q.model_dump()))
+    lesson.sets.append(qset)
+    return qset
+
+
+def gen_review_set(db: Session, lesson: Lesson, job: Job) -> None:
+    """Prépare les 3 questions du prochain rappel d'une leçon maîtrisée."""
+    item = db.get(ReviewItem, int((job.params or {}).get("item_id", 0)))
+    if item is None or item.state != "active" or item.set_id is not None:
+        return
+    ctx = build_ctx(lesson)
+    data = _ask_json("review_questions", ctx, prompts.review_questions(ctx, _asked(lesson)), {"version": item.stage + 3})
+    questions = [q for q in validate_items(QuestionOut, _items(data, "questions"), 2) if q.type != "schema"][:4]
+    if len(questions) < 2:
+        raise LLMError("bad_output", "pas assez de questions de rappel")
+    qset = _new_review_set(lesson, questions)
+    db.flush()
+    item.set_id = qset.id
+
+
+def gen_error_variant(db: Session, lesson: Lesson, job: Job) -> None:
+    """Carnet d'erreurs : repose l'erreur sous une autre forme."""
+    item = db.get(ReviewItem, int((job.params or {}).get("item_id", 0)))
+    if item is None or item.state != "active" or item.set_id is not None:
+        return
+    mistake = db.get(Mistake, item.ref_id) if item.ref_id else None
+    if mistake is None:
+        item.state = "done"
+        return
+    info = {"enonce": mistake.enonce, "given": mistake.given, "expected": mistake.expected, "notion": mistake.notion}
+    ctx = build_ctx(lesson)
+    data = _ask_json("error_variant", ctx, prompts.error_variant(ctx, info), {"mistake": info, "round": mistake.successes + item.stage})
+    if isinstance(data, dict) and isinstance(data.get("questions"), list) and data["questions"]:
+        data = data["questions"][0]
+    question = validate(QuestionOut, data)
+    if question.type == "schema":
+        raise LLMError("bad_output", "type de question inattendu")
+    if not question.notion:
+        question.notion = mistake.notion
+    qset = _new_review_set(lesson, [question])
+    db.flush()
+    item.set_id = qset.id
+
+
 HANDLERS: dict[str, Callable[[Session, Lesson, Job], None]] = {
     "extract": gen_extract,
     "explanation": gen_explanation,
@@ -240,4 +414,8 @@ HANDLERS: dict[str, Callable[[Session, Lesson, Job], None]] = {
     "exercises": gen_exercises,
     "exercise_variant": gen_exercise_variant,
     "reexplain": gen_reexplain,
+    "methods": gen_methods,
+    "videos": gen_videos,
+    "review_set": gen_review_set,
+    "error_variant": gen_error_variant,
 }

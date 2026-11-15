@@ -65,6 +65,8 @@ export interface Lesson {
   path?: PathStep[];
   exam?: Exam | null;
   current_ready?: boolean;
+  has_methods?: boolean;
+  open_mistakes?: number;
 }
 
 export interface AppState {
@@ -86,9 +88,16 @@ export interface StepInfo {
   minutes: number;
 }
 
+export interface SessionSize {
+  questions: number;
+  cards: number;
+  minutes: number;
+}
+
 export type NextStep =
   | { kind: "import" }
-  | { kind: "done"; mastered: number }
+  | { kind: "done"; mastered: number; next_review: string | null }
+  | { kind: "review"; size: SessionSize; subjects: string[]; lessons: number }
   | {
       kind: "step";
       lesson: Lesson;
@@ -113,14 +122,21 @@ export interface Feedback {
   manque?: string;
   erreurs?: string[];
   conseil?: string;
+  // Rédaction : notes par critère et fautes expliquées.
+  mode?: "redaction";
+  criteres?: { nom: string; note: number; commentaire: string }[];
+  fautes?: { extrait: string; type: string; explication: string; piste: string }[];
+  // Schéma à légender : chaque case juste ou fausse.
+  cases?: boolean[];
 }
 
 export interface TestQuestion {
   id: number;
-  type: "qcm" | "ouverte";
+  type: "qcm" | "ouverte" | "schema";
   enonce: string;
   choix: string[];
   notion: string;
+  schema?: { disposition: "chaine" | "cycle" | "ensemble"; cases: { role: string }[]; banque: string[] };
   attempt: {
     status: "pending" | "graded";
     answer_text: string;
@@ -128,7 +144,7 @@ export interface TestQuestion {
     score: number | null;
     feedback: Feedback | null;
   } | null;
-  correction: { bonne_reponse: number | null; reponse_modele: string; explication: string } | null;
+  correction: { bonne_reponse: number | null; reponse_modele: string; explication: string; noms: string[] } | null;
 }
 
 export interface TestSet {
@@ -153,6 +169,10 @@ export interface Exercise {
   enonce: string;
   type_exercice: string;
   notion: string;
+  document: string;
+  mode: "elements" | "redaction";
+  hints: string[];
+  hints_total: number;
   state: "todo" | "tried" | "succeeded" | "revealed";
   is_variant: boolean;
   draft: string;
@@ -175,6 +195,16 @@ export interface Summary {
   methodes: { titre: string; etapes: string[] }[];
   pieges: { piege: string; conseil: string }[];
   a_savoir_par_coeur: string[];
+  vocabulaire?: { mot: string; sens: string; exemple: string }[];
+  auteurs?: { nom: string; these: string; argument: string }[];
+}
+
+export interface Video {
+  id: string;
+  title: string;
+  channel: string;
+  duration_s: number;
+  raison: string;
 }
 
 export interface StepData {
@@ -182,9 +212,13 @@ export interface StepData {
   step: StepInfo;
   status: "current" | "done";
   language: Lang;
+  kind: Kind;
   generation: Generation;
   ready: boolean;
   content?: Explanation | Summary | null;
+  videos?: { status: string; videos: Video[] } | null;
+  cards?: number;
+  has_methods?: boolean;
   threshold?: number;
   set?: TestSet | null;
   previous?: (TestSet & { reexplain: { points: ReexplainPoint[] } | null }) | null;
@@ -201,12 +235,82 @@ export interface SetResult {
   mastered: boolean;
 }
 
+export interface ReviewResult {
+  passed: boolean;
+  done: boolean;
+  next_due: string | null;
+}
+
 export interface AnswerResult<Q> {
   question: Q;
   set: SetResult | null;
   progress: { succeeded: number; required: number } | null;
+  review: ReviewResult | null;
   step_done: boolean;
   mastered: boolean;
+}
+
+export interface LessonBrief {
+  id: number;
+  title: string;
+  chapter?: string;
+  subject: Subject;
+  language: Lang;
+}
+
+export interface ReviewItem {
+  id: number;
+  kind: "lesson" | "error" | "card";
+  stage: number;
+  lesson: LessonBrief;
+  questions?: TestQuestion[];
+  card?: { recto: string; verso: string };
+}
+
+export interface ReviewSession {
+  items: ReviewItem[];
+  size: SessionSize;
+  remaining: number;
+  waiting: number;
+  total_due: number;
+}
+
+export interface Plan {
+  today: {
+    size: SessionSize;
+    total_due: number;
+    remaining: number;
+    waiting: number;
+    subjects: { subject: Subject; lessons: string[]; count: number }[];
+  };
+  upcoming: { date: string; count: number }[];
+  exams: Exam[];
+  open_mistakes: number;
+}
+
+export interface MistakeEntry {
+  id: number;
+  lesson: LessonBrief;
+  source: string;
+  notion: string;
+  enonce: string;
+  given: string;
+  expected: string;
+  created_at: string;
+  resolved: boolean;
+  successes: number;
+  next_due: string | null;
+}
+
+export interface MethodsSheet {
+  chapter: { id: number; title: string };
+  subject: Subject;
+  language: Lang;
+  lessons: {
+    id: number;
+    title: string;
+    types: { nom: string; reconnaitre: string; etapes: string[]; erreur_classique: string; exemple: string }[];
+  }[];
 }
 
 export class ApiError extends Error {

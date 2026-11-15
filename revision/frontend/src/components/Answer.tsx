@@ -70,12 +70,58 @@ export function scoreLabel(score: number | null | undefined): string {
 export function FeedbackView({ feedback, score, lang }: { feedback: Feedback | null; score: number | null; lang: Lang }) {
   if (!feedback) return null;
   const elements = feedback.elements ?? [];
+  const criteria = feedback.criteres ?? [];
+  const faults = feedback.fautes ?? [];
   return (
     <div className={`feedback feedback-${scoreTone(score)}`}>
       <div className="feedback-head">
         <span className={`badge badge-${scoreTone(score)}`}>{scoreLabel(score)}</span>
         <span className="muted">{Math.round((score ?? 0) * 100)} %</span>
       </div>
+      {criteria.length > 0 && (
+        <ul className="criteria">
+          {criteria.map((c, i) => (
+            <li key={i}>
+              <span className="criteria-name">{c.nom}</span>
+              <span className="criteria-dots" aria-label={`${c.note} sur 4`}>
+                {[1, 2, 3, 4].map((n) => (
+                  <span key={n} className={n <= Math.round(c.note) ? "pip on" : "pip"} />
+                ))}
+              </span>
+              {c.commentaire && (
+                <span className="muted criteria-comment">
+                  <Md inline text={c.commentaire} lang={lang} />
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {faults.length > 0 && (
+        <div className="faults">
+          <strong className="warn-text">Tes fautes, à corriger toi-même :</strong>
+          <ul className="plain">
+            {faults.map((f, i) => (
+              <li key={i} className="fault">
+                {f.extrait && (
+                  <q className="fault-quote" dir="auto">
+                    {f.extrait}
+                  </q>
+                )}
+                {f.type && <span className="tag">{f.type}</span>}
+                <div>
+                  <Md inline text={f.explication} lang={lang} />
+                </div>
+                {f.piste && (
+                  <div className="muted">
+                    <Md inline text={f.piste} lang={lang} />
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {elements.length > 0 && (
         <ul className="elements">
           {elements.map((e, i) => (

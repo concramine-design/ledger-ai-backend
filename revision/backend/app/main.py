@@ -10,11 +10,13 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import FRONTEND_DIST, get_config
 from .db import init_db
-from .routers import chat, lessons, setup, steps
+from .routers import chat, lessons, reviews, setup, steps
 from .services.generation.worker import recover_on_startup, worker
 from .services.llm import LLMError
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s")
+# httpx écrit chaque adresse appelée dans le journal : on le fait taire pour qu'aucune clé n'y apparaisse.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 @asynccontextmanager
@@ -36,7 +38,7 @@ async def llm_error(_request: Request, exc: LLMError) -> JSONResponse:
     return JSONResponse(status_code=503, content={"detail": {"kind": exc.kind, "message": exc.message}})
 
 
-for module in (setup, lessons, steps, chat):
+for module in (setup, lessons, steps, chat, reviews):
     app.include_router(module.router)
 
 

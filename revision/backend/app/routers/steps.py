@@ -1,4 +1,4 @@
-"""Le parcours : contenu de chaque étape, réponses, validation."""
+"""Le parcours : contenu de chaque étape, réponses, indices, validation."""
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -8,9 +8,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ..db import get_db, get_settings
-from ..models import Attempt, Lesson, Question, QuestionSet, utcnow
-from ..services import parcours
-from ..services.evaluation import grade_mcq, grade_open
+from ..models import Attempt, Lesson, Question, QuestionSet, ReviewItem, utcnow
+from ..services import followup, parcours, srs
+from ..services.evaluation import grade_mcq, grade_open, grade_schema, grade_writing
 from ..services.generation.generators import build_ctx, get_artifact
 from ..services.generation.worker import enqueue
 from ..services.views import (
@@ -26,7 +26,7 @@ from .lessons import get_lesson
 
 router = APIRouter(prefix="/api")
 
-MAX_ANSWER_CHARS = 6000
+MAX_ANSWER_CHARS = 8000
 
 
 def _sets(lesson: Lesson, kind: str, level: Optional[int] = None) -> list[QuestionSet]:
@@ -37,11 +37,18 @@ def _step_key(qset: QuestionSet) -> str:
     return f"ex{qset.level}" if qset.kind == "exercises" else qset.kind
 
 
+def _required(qset: QuestionSet, settings: dict[str, Any]) -> int:
+    """Nombre d'exercices à réussir. Une seule rédaction réussie suffit pour un niveau de rédaction."""
+    if qset.questions and all(q.data.get("mode") == "redaction" for q in qset.questions if q.parent_id is None):
+        return 1
+    return settings["exercises_required"]
+
+
 def _exercise_progress(qset: QuestionSet, settings: dict[str, Any]) -> dict[str, int]:
     threshold = settings["exercise_threshold"]
     return {
         "succeeded": sum(exercise_succeeded(q, threshold) for q in qset.questions),
-        "required": settings["exercises_required"],
+        "required": _required(qset, settings),
     }
 
 
@@ -56,6 +63,7 @@ def get_step(lesson_id: int, key: str, db: Session = Depends(get_db)) -> dict:
         "step": {"key": step.key, "label": step.label, "description": step.description, "minutes": step.minutes},
         "status": status,
         "language": lesson.subject.language,
+        "kind": lesson.subject.kind,
         "generation": generation_status(lesson),
         "ready": step_ready(lesson, step),
     }
@@ -63,6 +71,11 @@ def get_step(lesson_id: int, key: str, db: Session = Depends(get_db)) -> dict:
     if step.job_kind in ("explanation", "summary"):
         art = get_artifact(lesson, step.job_kind)
         out["content"] = art.content if art else None
+        if step.job_kind == "explanation":
+            videos = get_artifact(lesson, "videos")
+            out["videos"] = videos.content if videos else None
+        else:
+            out["cards"] = sum(r.kind == "card" for r in lesson.reviews)
 
     elif step.job_kind in ("minitest", "quiz"):
         sets = _sets(lesson, step.job_kind)
@@ -97,6 +110,7 @@ def get_step(lesson_id: int, key: str, db: Session = Depends(get_db)) -> dict:
             j.kind == "exercise_variant" and j.status != "done" and (j.params or {}).get("question_id") in ids
             for j in lesson.jobs
         )
+        out["has_methods"] = get_artifact(lesson, "methods") is not None
     return out
 
 
@@ -112,6 +126,8 @@ def validate_step(lesson_id: int, key: str, db: Session = Depends(get_db)) -> di
         raise HTTPException(409, "Cette étape n'est pas encore prête.")
     if status == "current":
         parcours.mark_done(db, lesson, key)
+        if step.job_kind == "summary":
+            followup.on_summary_read(db, lesson)
         db.commit()
     nxt = parcours.current_step(lesson)
     return {"ok": True, "next": nxt.key if nxt else None}
@@ -120,16 +136,24 @@ def validate_step(lesson_id: int, key: str, db: Session = Depends(get_db)) -> di
 class AnswerIn(BaseModel):
     answer_text: str = Field(default="", max_length=MAX_ANSWER_CHARS)
     choice_index: Optional[int] = None
+    labels: Optional[list[str]] = None  # schéma à légender : le nom choisi pour chaque case
 
 
-def _finish_test(db: Session, lesson: Lesson, qset: QuestionSet, settings: dict[str, Any]) -> Optional[dict]:
-    """Quand toutes les questions sont corrigées : calcule le score et décide de la suite."""
+def _all_scores(qset: QuestionSet) -> Optional[list[float]]:
     scores = []
     for q in qset.questions:
         graded = [a for a in q.attempts if a.status == "graded"]
         if not graded:
             return None
         scores.append(graded[-1].score or 0.0)
+    return scores
+
+
+def _finish_test(db: Session, lesson: Lesson, qset: QuestionSet, settings: dict[str, Any]) -> Optional[dict]:
+    """Quand toutes les questions sont corrigées : calcule le score et décide de la suite."""
+    scores = _all_scores(qset)
+    if scores is None:
+        return None
     score = round(100 * sum(scores) / len(scores))
     threshold = settings[f"{qset.kind}_threshold"]
     passed = score >= threshold
@@ -147,6 +171,20 @@ def _finish_test(db: Session, lesson: Lesson, qset: QuestionSet, settings: dict[
     return {"state": qset.state, "score": score, "threshold": threshold, "passed": passed, "mastered": mastered}
 
 
+def _finish_review(db: Session, lesson: Lesson, qset: QuestionSet, item: ReviewItem) -> Optional[dict]:
+    """Rappel terminé : on reprogramme selon le résultat et on prépare le suivant."""
+    scores = _all_scores(qset)
+    if scores is None:
+        return None
+    mean = sum(scores) / len(scores)
+    qset.score = round(100 * mean)
+    qset.finished_at = utcnow()
+    result = srs.finish_questions(db, item, mean)
+    qset.state = "passed" if result["passed"] else "failed"
+    followup.on_review_finished(db, lesson, item)
+    return result
+
+
 @router.post("/questions/{question_id}/answer")
 def answer(question_id: int, body: AnswerIn, db: Session = Depends(get_db)) -> dict:
     question = db.get(Question, question_id)
@@ -154,23 +192,34 @@ def answer(question_id: int, body: AnswerIn, db: Session = Depends(get_db)) -> d
         raise HTTPException(404, "Question introuvable.")
     qset = question.qset
     lesson = qset.lesson
-    key = _step_key(qset)
-    status = parcours.require_open(lesson, key)
     settings = get_settings(db)
+    is_review = qset.kind == "review"
     is_test = qset.kind in ("minitest", "quiz")
     text = body.answer_text.strip()
+    item: Optional[ReviewItem] = None
+    status = "current"
 
-    if is_test:
-        if status != "current" or qset.state != "active":
-            raise HTTPException(409, "Ce test est terminé.")
-        if any(a.status == "graded" for a in question.attempts):
-            raise HTTPException(409, "Tu as déjà répondu à cette question.")
-    elif not text:
+    if is_review:
+        item = db.query(ReviewItem).filter(ReviewItem.set_id == qset.id, ReviewItem.state == "active").first()
+        if item is None or qset.state != "active":
+            raise HTTPException(409, "Ce rappel est terminé.")
+    else:
+        status = parcours.require_open(lesson, _step_key(qset))  # 403 si l'étape est verrouillée
+
+    if is_test and (status != "current" or qset.state != "active"):
+        raise HTTPException(409, "Ce test est terminé.")
+    if (is_test or is_review) and any(a.status == "graded" for a in question.attempts):
+        raise HTTPException(409, "Tu as déjà répondu à cette question.")
+    if question.qtype == "exercice" and not text:
         raise HTTPException(422, "Écris d'abord ta réponse.")
     if question.qtype == "qcm":
         choices = question.data.get("choix", [])
         if body.choice_index is None or not 0 <= body.choice_index < len(choices):
             raise HTTPException(422, "Choisis une réponse.")
+    if question.qtype == "schema":
+        if not body.labels or len(body.labels) != len(question.data.get("elements", [])):
+            raise HTTPException(422, "Complète toutes les cases du schéma.")
+        text = " ; ".join(body.labels)
 
     # La réponse est enregistrée avant l'appel à l'IA : rien n'est perdu si la correction échoue.
     attempt = next((a for a in question.attempts if a.status == "pending"), None)
@@ -184,8 +233,12 @@ def answer(question_id: int, body: AnswerIn, db: Session = Depends(get_db)) -> d
 
     if question.qtype == "qcm":
         score, feedback = grade_mcq(question.data, body.choice_index or 0)
+    elif question.qtype == "schema":
+        score, feedback = grade_schema(question.data, body.labels or [])
+    elif question.data.get("mode") == "redaction":
+        score, feedback = grade_writing(build_ctx(lesson), question.data, text)
     else:
-        score, feedback = grade_open(build_ctx(lesson), question.data, text, spoiler_allowed=is_test)
+        score, feedback = grade_open(build_ctx(lesson), question.data, text, spoiler_allowed=is_test or is_review)
 
     attempt.status = "graded"
     attempt.score = score
@@ -193,43 +246,69 @@ def answer(question_id: int, body: AnswerIn, db: Session = Depends(get_db)) -> d
     lesson.last_activity_at = utcnow()
     db.flush()
 
-    result: dict[str, Any] = {"set": None, "progress": None, "step_done": False, "mastered": False}
+    result: dict[str, Any] = {"set": None, "progress": None, "review": None, "step_done": False, "mastered": False}
     if is_test:
+        if score < 0.999:
+            followup.on_mistake(db, lesson, question, attempt, qset.kind)
         finished = _finish_test(db, lesson, qset, settings)
         result["set"] = finished
         if finished:
             result["step_done"] = finished["passed"]
             result["mastered"] = finished["mastered"]
+    elif is_review:
+        assert item is not None
+        if score < 0.999 and item.kind == "lesson":
+            followup.on_mistake(db, lesson, question, attempt, "rappel")
+        result["review"] = _finish_review(db, lesson, qset, item)
     else:
         progress = _exercise_progress(qset, settings)
         result["progress"] = progress
         if progress["succeeded"] >= progress["required"] and status == "current":
-            result["mastered"] = parcours.mark_done(db, lesson, key, round(score * 100))
+            result["mastered"] = parcours.mark_done(db, lesson, _step_key(qset), round(score * 100))
             result["step_done"] = True
+    if result["mastered"]:
+        followup.on_mastered(db, lesson)
     db.commit()
 
-    if is_test:
-        result["question"] = test_question_view(question)
-    else:
+    if question.qtype == "exercice":
         result["question"] = exercise_view(question, settings["exercise_threshold"])
+    else:
+        result["question"] = test_question_view(question)
     return result
+
+
+def _exercise(db: Session, question_id: int) -> tuple[Question, Lesson, dict[str, Any]]:
+    question = db.get(Question, question_id)
+    if question is None or question.qtype != "exercice":
+        raise HTTPException(404, "Exercice introuvable.")
+    lesson = question.qset.lesson
+    parcours.require_open(lesson, _step_key(question.qset))
+    return question, lesson, get_settings(db)
+
+
+@router.post("/questions/{question_id}/hint")
+def hint(question_id: int, db: Session = Depends(get_db)) -> dict:
+    """Indice suivant : une piste, puis la méthode, puis le début de la solution."""
+    question, _lesson, settings = _exercise(db, question_id)
+    total = len(question.data.get("indices", []))
+    used = question.hints_used or 0
+    if used < total:
+        question.hints_used = used + 1
+        db.commit()
+    return {"question": exercise_view(question, settings["exercise_threshold"])}
 
 
 @router.post("/questions/{question_id}/reveal")
 def reveal(question_id: int, db: Session = Depends(get_db)) -> dict:
     """Correction détaillée, en dernier recours. L'exercice ne compte plus : un autre du même type est préparé."""
-    question = db.get(Question, question_id)
-    if question is None or question.qtype != "exercice":
-        raise HTTPException(404, "Exercice introuvable.")
-    qset = question.qset
-    lesson = qset.lesson
-    parcours.require_open(lesson, _step_key(qset))
-    settings = get_settings(db)
+    question, lesson, settings = _exercise(db, question_id)
     threshold = settings["exercise_threshold"]
-    if not any(a.status == "graded" for a in question.attempts):
+    graded = [a for a in question.attempts if a.status == "graded"]
+    if not graded:
         raise HTTPException(409, "Essaie d'abord de répondre : la correction vient après ta tentative.")
     if question.revealed_at is None and not exercise_succeeded(question, threshold):
         question.revealed_at = utcnow()
+        followup.on_mistake(db, lesson, question, graded[-1], "exercice")
         already = any(
             j.kind == "exercise_variant" and (j.params or {}).get("question_id") == question.id for j in lesson.jobs
         )
@@ -237,4 +316,3 @@ def reveal(question_id: int, db: Session = Depends(get_db)) -> dict:
             enqueue(db, lesson, "exercise_variant", {"question_id": question.id}, priority=6)
         db.commit()
     return {"question": exercise_view(question, threshold), "variant_pending": True}
-

@@ -20,7 +20,7 @@ def test_first_launch(client):
 
     subjects = client.get("/api/subjects").json()
     assert [s["name"] for s in subjects] == ["Maths", "Physique-Chimie", "SVT", "Philosophie", "Arabe", "Français", "Anglais"]
-    assert [s["code"] for s in subjects if s["available"]] == ["maths", "pc"]
+    assert all(s["available"] for s in subjects), "toutes les matières ont leur parcours"
 
     maths = subject_id(client)
     subjects = client.patch(f"/api/subjects/{maths}", json={"language": "ar"}).json()
@@ -37,14 +37,14 @@ def test_first_launch(client):
 def test_import_generates_everything_without_any_action(client):
     assert client.get("/api/next").json() == {"kind": "import"}
     lesson = import_text(client)
-    assert lesson["generation"] == {"total": 7, "done": 0, "active": True, "current": "Explication", "problem": None}
+    assert lesson["generation"] == {"total": 9, "done": 0, "active": True, "current": "Explication", "problem": None}
 
     nxt = client.get("/api/next").json()
     assert nxt["kind"] == "step" and nxt["step"]["key"] == "comprendre" and nxt["ready"] is False
 
-    assert run_jobs() == 7
+    assert run_jobs() == 9  # explication, mini-test, vidéos, résumé, quiz, 3 niveaux d'exercices, méthodes
     detail = client.get(f"/api/lessons/{lesson['id']}").json()
-    assert detail["generation"]["done"] == 7 and detail["generation"]["active"] is False
+    assert detail["generation"]["done"] == 9 and detail["generation"]["active"] is False
     assert detail["current_ready"] is True
     assert [s["status"] for s in detail["path"]] == [
         "current", "locked", "soon", "locked", "locked", "soon", "locked", "locked", "locked",
@@ -114,7 +114,8 @@ def test_full_path_to_mastery(client):
 
     detail = client.get(f"/api/lessons/{lid}").json()
     assert detail["mastered"] is True and detail["progress"] == 100 and detail["current_step"] is None
-    assert client.get("/api/next").json() == {"kind": "done", "mastered": 1}
+    nxt = client.get("/api/next").json()
+    assert nxt["kind"] == "done" and nxt["mastered"] == 1 and nxt["next_review"] is not None
 
 
 def take_test_remaining(client, lid: int, key: str) -> dict:
@@ -142,7 +143,7 @@ def test_failed_minitest_reexplains_then_offers_a_new_test(client):
     assert step["previous"]["score"] == 0 and step["previous"]["reexplain"] is None
     old_questions = {q["enonce"] for q in step["previous"]["questions"]}
 
-    assert run_jobs() == 2  # ré-explication + nouveau mini-test
+    assert run_jobs() == 6  # ré-explication, nouveau mini-test, et une reprise par erreur (4)
     step = client.get(f"/api/lessons/{lid}/steps/minitest").json()
     assert step["ready"] is True and step["set"]["version"] == 2
     assert step["previous"]["reexplain"]["points"]
@@ -205,7 +206,7 @@ def test_exercise_feedback_reveal_and_variant(client):
 
     step = client.get(f"/api/lessons/{lid}/steps/ex1").json()
     assert step["variant_pending"] is True
-    assert run_jobs() == 1
+    assert run_jobs() == 2  # nouvel exercice + reprise de l'erreur pour le carnet
     step = client.get(f"/api/lessons/{lid}/steps/ex1").json()
     assert step["variant_pending"] is False and len(step["exercises"]) == 4 and step["exercises"][3]["is_variant"] is True
 

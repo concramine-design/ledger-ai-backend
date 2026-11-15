@@ -19,6 +19,7 @@ Les clés se règlent uniquement dans le fichier `.env` (jamais dans le code).
 
 | Variable | Rôle |
 | --- | --- |
+| `YOUTUBE_API_KEY` | Facultative. Clé YouTube Data API v3 pour la sélection de vidéos. |
 | `GEMINI_API_KEY` | Clé Gemini, gratuite sur https://aistudio.google.com/apikey. Sert aussi à lire les photos du cahier. |
 | `GROQ_API_KEY` | Facultative, sur https://console.groq.com/keys. Sert de secours si Gemini est saturé. |
 | `LLM_PROVIDER` | `auto` (Gemini puis Groq), `gemini`, `groq`, ou `mock` pour essayer sans clé avec des contenus factices. |
@@ -26,17 +27,35 @@ Les clés se règlent uniquement dans le fichier `.env` (jamais dans le code).
 
 Après une modification de `.env`, ferme la fenêtre noire et relance l'application.
 
-## Ce que fait la version 1
+## Ce que fait l'application (version 2)
 
 - Premier lancement : matières, langue de chaque matière (français, arabe, anglais), dates des contrôles.
-- Import d'une leçon de Maths ou de Physique-Chimie : photos du cahier, PDF ou texte collé.
-- Génération automatique en arrière-plan dès l'import : explication, mini-test, résumé, quiz, exercices des trois niveaux.
+- Import d'une leçon dans toutes les matières : photos du cahier, PDF ou texte collé.
+- Génération automatique en arrière-plan dès l'import : explication, sélection de vidéos, mini-test, résumé, quiz, exercices des trois niveaux, fiche « méthodes types ».
 - Parcours verrouillé : Comprendre, Mini-test, Résumé, Quiz complet, Exercices niveau 1, 2 puis 3. Chaque étape débloque la suivante.
-- Écran d'accueil « Ta prochaine étape ».
+- Exercices selon la matière :
+  - Maths, Physique-Chimie, SVT : indices à 3 niveaux (piste, méthode, début de solution), correction détaillée en dernier recours, fiche « méthodes types » par chapitre. En SVT : analyse de documents et schémas à légender.
+  - Français, Arabe, Anglais : exercices de langue, compréhension de texte, production écrite corrigée par critères, avec les fautes expliquées sans réécriture.
+  - Philosophie : notions et auteurs en fiches, plan d'une question de réflexion, rédaction argumentée.
+- Vidéos : l'application cherche sur YouTube, compare les résultats et affiche les 3 meilleures avec la raison du choix.
+- Carnet d'erreurs : chaque erreur est notée, puis reposée plus tard sous une autre forme.
+- Répétition espacée : rappels à 1, 3, 7, 14 et 30 jours après une leçon maîtrisée, cartes mémoire tirées des fiches, rappels resserrés avant un contrôle.
+- Planning « à revoir aujourd'hui » : une séance courte qui mélange les matières.
+- Écran d'accueil « Ta prochaine étape » : la révision du jour d'abord, puis la leçon la plus urgente.
 - Chat sur la leçon, qui commence toujours par une question.
 - Bouton « Signaler une erreur » et rappel : en cas de désaccord, c'est le professeur qui a raison.
 
-Les étapes « Feuille blanche » et « Explique-moi », les autres matières, les vidéos, les indices, le planning et le carnet d'erreurs arrivent dans les versions 2 et 3.
+Les étapes « Feuille blanche » et « Explique-moi », le contrôle blanc, la carte mentale, la série de jours, le minuteur et le mode parent arrivent dans la version 3.
+
+## Vidéos YouTube
+
+Ajoute `YOUTUBE_API_KEY` dans `.env` (clé gratuite, voir les indications dans `.env.example`). Le quota gratuit est de 10 000 unités par jour ; une leçon en consomme environ 200.
+
+Les sous-titres ne sont pas accessibles par l'API officielle pour les vidéos d'autrui. L'application tente de les lire par une bibliothèque non officielle ; si cela échoue, elle classe les vidéos sur le titre, la description, la durée et la chaîne.
+
+## Mettre à jour depuis une version précédente
+
+Extrais la nouvelle archive par-dessus l'ancien dossier, en gardant `data` et `.env`, puis relance `installer.bat` une fois. Les leçons déjà importées reçoivent automatiquement les nouveautés au démarrage.
 
 ## Données
 
@@ -64,7 +83,7 @@ cd backend && ../.venv/bin/python -m pytest          # tests, avec IA simulée, 
 cd frontend && npm install && npm run build          # régénère frontend/dist, servi par FastAPI
 
 # Parcours complet dans un navigateur (Playwright), sur une base vide et avec LLM_PROVIDER=mock
-node e2e/parcours.mjs http://127.0.0.1:8765
+node e2e/parcours.mjs http://127.0.0.1:8765 "" data/revision.db
 ```
 
 Le dossier `frontend/dist` est versionné exprès : le PC de l'élève n'a besoin que de Python.
@@ -74,4 +93,6 @@ Organisation du code :
 - `backend/app/services/llm` : fournisseurs Gemini, Groq et IA simulée, derrière une interface commune.
 - `backend/app/services/generation` : file de tâches, consignes données à l'IA, validation des réponses.
 - `backend/app/services/parcours.py` : étapes verrouillées, décidées côté serveur.
+- `backend/app/services/srs.py` : répétition espacée, carnet d'erreurs, planning du jour.
+- `backend/app/services/youtube.py` : recherche et tri des vidéos.
 - `backend/app/routers` : API. `frontend/src` : interface React.

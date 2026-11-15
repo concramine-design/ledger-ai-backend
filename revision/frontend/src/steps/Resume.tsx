@@ -6,6 +6,12 @@ import { TrustNote } from "../components/Report";
 import { Icon, Notice } from "../components/Ui";
 import type { StepProps } from "../pages/StepPage";
 
+const TITLES = {
+  sciences: { definitions: "Définitions", formules: "Formules et propriétés", methodes: "Méthodes" },
+  langue: { definitions: "Règles", formules: "Structures à retenir", methodes: "Méthodes" },
+  philo: { definitions: "Notions", formules: "Repères", methodes: "Méthode de rédaction" },
+} as const;
+
 /** Étape 4 : la fiche de référence, exportable en PDF par l'impression du navigateur. */
 export default function Resume({ data }: StepProps) {
   const navigate = useNavigate();
@@ -13,6 +19,9 @@ export default function Resume({ data }: StepProps) {
   const lang = data.language;
   const dir = lang === "ar" ? "rtl" : "ltr";
   const [error, setError] = useState("");
+  const titles = TITLES[data.kind] ?? TITLES.sciences;
+  const vocabulary = fiche.vocabulaire ?? [];
+  const authors = fiche.auteurs ?? [];
 
   const validate = async () => {
     try {
@@ -35,7 +44,7 @@ export default function Resume({ data }: StepProps) {
 
         {fiche.definitions.length > 0 && (
           <section>
-            <h3 dir="ltr">Définitions</h3>
+            <h3 dir="ltr">{titles.definitions}</h3>
             <dl>
               {fiche.definitions.map((d, i) => (
                 <div key={i} className="def">
@@ -53,7 +62,7 @@ export default function Resume({ data }: StepProps) {
 
         {fiche.formules.length > 0 && (
           <section>
-            <h3 dir="ltr">Formules et propriétés</h3>
+            <h3 dir="ltr">{titles.formules}</h3>
             <ul className="formulas">
               {fiche.formules.map((f, i) => (
                 <li key={i}>
@@ -72,7 +81,7 @@ export default function Resume({ data }: StepProps) {
 
         {fiche.methodes.length > 0 && (
           <section>
-            <h3 dir="ltr">Méthodes</h3>
+            <h3 dir="ltr">{titles.methodes}</h3>
             {fiche.methodes.map((m, i) => (
               <div key={i} className="method">
                 <strong>
@@ -87,6 +96,48 @@ export default function Resume({ data }: StepProps) {
                 </ol>
               </div>
             ))}
+          </section>
+        )}
+
+        {authors.length > 0 && (
+          <section>
+            <h3 dir="ltr">Auteurs</h3>
+            <dl>
+              {authors.map((a, i) => (
+                <div key={i} className="def">
+                  <dt>{a.nom}</dt>
+                  <dd>
+                    <Md inline text={a.these} lang={lang} />
+                    {a.argument && (
+                      <div className="muted">
+                        <Md inline text={a.argument} lang={lang} />
+                      </div>
+                    )}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        )}
+
+        {vocabulary.length > 0 && (
+          <section>
+            <h3 dir="ltr">Vocabulaire</h3>
+            <dl className="vocab">
+              {vocabulary.map((v, i) => (
+                <div key={i} className="def">
+                  <dt dir="auto">{v.mot}</dt>
+                  <dd>
+                    <Md inline text={v.sens} lang={lang} />
+                    {v.exemple && (
+                      <div className="muted" dir="auto">
+                        <em>{v.exemple}</em>
+                      </div>
+                    )}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </section>
         )}
 
@@ -141,7 +192,10 @@ export default function Resume({ data }: StepProps) {
           </button>
         )}
       </div>
-      <p className="muted no-print small">Pour le PDF : dans la fenêtre d'impression, choisis « Enregistrer au format PDF ».</p>
+      <p className="muted no-print small">
+        Pour le PDF : dans la fenêtre d'impression, choisis « Enregistrer au format PDF ». Une fois la fiche lue, ses définitions deviennent des cartes
+        mémoire dans tes révisions du jour.
+      </p>
     </div>
   );
 }

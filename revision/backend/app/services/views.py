@@ -1,6 +1,7 @@
 """Mise en forme des données envoyées à l'interface."""
 from __future__ import annotations
 
+import random
 from datetime import date
 from typing import Any, Optional
 
@@ -10,14 +11,9 @@ from ..models import Attempt, Exam, Job, Lesson, Question, QuestionSet, Subject,
 from . import parcours
 from .generation.worker import job_label
 
-# Matières dont le parcours est disponible dans cette version.
-AVAILABLE_CODES = {"maths", "pc"}
-
-
 def subject_available(subject: Subject) -> bool:
-    if subject.code is not None:
-        return subject.code in AVAILABLE_CODES
-    return subject.kind == "sciences"
+    """Depuis la version 2, toutes les matières ont leur parcours."""
+    return subject.kind in ("sciences", "langue", "philo")
 
 
 def subject_view(subject: Subject) -> dict[str, Any]:
@@ -124,6 +120,8 @@ def lesson_view(db: Session, lesson: Lesson, detailed: bool = False) -> dict[str
         out["exam"] = exam_view(exam) if exam else None
         if cur:
             out["current_ready"] = step_ready(lesson, cur)
+        out["has_methods"] = any(a.kind == "methods" for a in lesson.artifacts)
+        out["open_mistakes"] = sum(m.resolved_at is None for m in lesson.mistakes)
     return out
 
 
@@ -132,8 +130,15 @@ def _latest(question: Question) -> Optional[Attempt]:
     return question.attempts[-1] if question.attempts else None
 
 
+def _word_bank(question: Question) -> list[str]:
+    """Les noms à placer sur un schéma, dans un ordre mélangé mais stable."""
+    names = [e.get("nom", "") for e in question.data.get("elements", [])]
+    random.Random(question.id * 7919 + 3).shuffle(names)
+    return names
+
+
 def test_question_view(question: Question) -> dict[str, Any]:
-    """Question de mini-test ou de quiz. La correction n'apparaît qu'après la réponse."""
+    """Question de mini-test, de quiz ou de rappel. La correction n'apparaît qu'après la réponse."""
     d = question.data
     out: dict[str, Any] = {
         "id": question.id,
@@ -144,6 +149,12 @@ def test_question_view(question: Question) -> dict[str, Any]:
         "attempt": None,
         "correction": None,
     }
+    if question.qtype == "schema":
+        out["schema"] = {
+            "disposition": d.get("disposition", "ensemble"),
+            "cases": [{"role": e.get("role", "")} for e in d.get("elements", [])],
+            "banque": _word_bank(question),
+        }
     att = _latest(question)
     if att is not None:
         out["attempt"] = {
@@ -158,6 +169,7 @@ def test_question_view(question: Question) -> dict[str, Any]:
                 "bonne_reponse": d.get("bonne_reponse"),
                 "reponse_modele": d.get("reponse_modele", ""),
                 "explication": d.get("explication", ""),
+                "noms": [e.get("nom", "") for e in d.get("elements", [])],
             }
     return out
 
@@ -202,6 +214,10 @@ def exercise_view(question: Question, threshold: int) -> dict[str, Any]:
         "enonce": d.get("enonce", ""),
         "type_exercice": d.get("type_exercice", ""),
         "notion": question.notion,
+        "document": d.get("document", ""),
+        "mode": d.get("mode", "elements"),
+        "hints": list(d.get("indices", []))[: question.hints_used or 0] if not solved else list(d.get("indices", [])),
+        "hints_total": len(d.get("indices", [])),
         "state": state,
         "is_variant": question.parent_id is not None,
         "draft": pending.answer_text if pending else "",
