@@ -210,3 +210,35 @@ def test_no_api_key_ever_appears_in_source():
         text = path.read_text(encoding="utf-8")
         assert "AIza" not in text and "gsk_" not in text, path
     assert json.dumps({"k": groq_mod.API_ROOT})  # modules importables
+
+
+def test_gemini_falls_back_to_another_model_when_overloaded(monkeypatch):
+    models = {"models": [
+        {"name": "models/gemini-3.6-flash", "supportedGenerationMethods": ["generateContent"]},
+        {"name": "models/gemini-2.5-flash", "supportedGenerationMethods": ["generateContent"]},
+    ]}
+
+    def responder(method, url, body):
+        if method == "GET":
+            return 200, models
+        if "gemini-3.6-flash" in url:
+            return 503, {"error": {"message": "This model is currently experiencing high demand."}}
+        return 200, GEMINI_OK
+
+    server = FakeServer(monkeypatch, responder)
+    provider = GeminiProvider("CLE", "gemini-3.6-flash")
+    assert provider.generate(_req()) == '{"a": 1}'
+    assert server.calls[-1]["url"].endswith("gemini-2.5-flash:generateContent")
+    assert provider.model == "gemini-3.6-flash", "le modèle principal reste le même pour les appels suivants"
+
+
+def test_gemini_overload_without_alternative_is_transient(monkeypatch):
+    def responder(method, url, body):
+        if method == "GET":
+            return 200, {"models": [{"name": "models/gemini-3.6-flash", "supportedGenerationMethods": ["generateContent"]}]}
+        return 503, {"error": {"message": "high demand"}}
+
+    FakeServer(monkeypatch, responder)
+    with pytest.raises(LLMError) as err:
+        GeminiProvider("CLE", "gemini-3.6-flash").generate(_req())
+    assert err.value.kind == "server" and err.value.transient

@@ -13,11 +13,13 @@ API_ROOT = "https://generativelanguage.googleapis.com/v1beta"
 _EXCLUDED = ("lite", "image", "tts", "live", "audio", "embedding", "robotics", "computer")
 
 
-def pick_model(models: list[dict[str, Any]]) -> Optional[str]:
+def pick_model(models: list[dict[str, Any]], exclude: tuple[str, ...] = ()) -> Optional[str]:
     """Choisit le modèle « flash » stable le plus récent dans la liste renvoyée par l'API."""
     best: tuple[tuple[int, float], str] | None = None
     for m in models:
         name = str(m.get("name", "")).removeprefix("models/")
+        if name in exclude:
+            continue
         if "generateContent" not in (m.get("supportedGenerationMethods") or []):
             continue
         match = re.fullmatch(r"gemini-(\d+(?:\.\d+)?)-flash(-[a-z0-9-]+)?", name)
@@ -39,6 +41,7 @@ class GeminiProvider(Provider):
         self.model = "" if model in ("", "auto") else model
         self.timeout = timeout
         self._discovered = False
+        self._models: list[dict[str, Any]] | None = None
 
     # -- HTTP ---------------------------------------------------------------
     def _headers(self) -> dict[str, str]:
@@ -52,11 +55,23 @@ class GeminiProvider(Provider):
         except httpx.TransportError as exc:
             raise LLMError("network", str(exc)) from exc
 
+    def _list_models(self) -> list[dict[str, Any]]:
+        if self._models is None:
+            resp = self._request("GET", f"{API_ROOT}/models", params={"pageSize": 200})
+            if resp.status_code != 200:
+                raise self._error(resp)
+            self._models = resp.json().get("models", [])
+        return self._models
+
+    def _fallback(self, current: str) -> Optional[str]:
+        """Un autre modèle flash, pour contourner une surcharge passagère du modèle principal."""
+        try:
+            return pick_model(self._list_models(), exclude=(current,))
+        except LLMError:
+            return None
+
     def _discover(self) -> None:
-        resp = self._request("GET", f"{API_ROOT}/models", params={"pageSize": 200})
-        if resp.status_code != 200:
-            raise self._error(resp)
-        model = pick_model(resp.json().get("models", []))
+        model = pick_model(self._list_models())
         if not model:
             raise LLMError("config", "aucun modèle Gemini utilisable trouvé")
         self.model = model
@@ -106,14 +121,25 @@ class GeminiProvider(Provider):
         if not self.model:
             self._discover()
         with_config = True
-        for _ in range(3):
-            url = f"{API_ROOT}/models/{self.model}:generateContent"
+        model = self.model
+        fell_back = False
+        for _ in range(4):
+            url = f"{API_ROOT}/models/{model}:generateContent"
             resp = self._request("POST", url, json=self._body(req, with_config))
             if resp.status_code == 200:
                 return self._text(resp.json())
             err = self._error(resp)
+            if err.kind == "server" and not fell_back:
+                # Modèle surchargé (« high demand ») : on essaie tout de suite un autre modèle Gemini.
+                fell_back = True
+                alternative = self._fallback(model)
+                if alternative:
+                    model = alternative
+                    continue
+                raise err
             if err.kind == "model" and not self._discovered:
                 self._discover()  # le modèle du .env n'existe plus : on en choisit un autre
+                model = self.model
                 continue
             if err.kind == "bad_request" and with_config:
                 with_config = False  # option refusée par ce modèle : on demande le JSON par le prompt
