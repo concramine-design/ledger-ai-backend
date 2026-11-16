@@ -13,7 +13,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 ENV_FILE = ROOT_DIR / ".env"
 FRONTEND_DIST = ROOT_DIR / "frontend" / "dist"
 
-APP_VERSION = "2.0"
+APP_VERSION = "3.0"
 
 
 @dataclass(frozen=True)

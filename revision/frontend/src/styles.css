@@ -1477,3 +1477,332 @@ textarea.input {
     break-inside: avoid;
   }
 }
+
+/* -- Version 3 : carte mentale, feuille, explique, contrôle blanc, parent --- */
+.streak-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.streak {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.streak-flame {
+  font-size: 1.6rem;
+}
+.rewards {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.reward {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #2a2440;
+  color: #d5c8ff;
+  border-radius: 999px;
+  padding: 0.15rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.mindmap-section h2 {
+  margin-top: 1.4rem;
+}
+.mindmap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+.mindmap-center {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 1.1rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: 999px;
+  text-align: center;
+}
+.mindmap-branches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.9rem;
+  width: 100%;
+}
+.mindmap-branch {
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--branch, var(--accent));
+  border-radius: 12px;
+  padding: 0.7rem 0.9rem;
+  background: var(--surface-2);
+}
+.mindmap-branch-title {
+  font-weight: 700;
+  color: var(--branch, var(--accent));
+  margin-bottom: 0.3rem;
+}
+.mindmap-branch ul {
+  margin: 0;
+  padding-inline-start: 1.1rem;
+}
+.mindmap-branch li {
+  font-size: 0.92rem;
+  margin: 0.2rem 0;
+}
+
+.talk {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-height: 60vh;
+  overflow: auto;
+}
+.talk .bubble {
+  max-width: 85%;
+}
+.bubble-who {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.mastery-pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.m-vert {
+  background: #153a30;
+  color: var(--ok);
+}
+.m-orange {
+  background: #3a2e15;
+  color: var(--warn);
+}
+.m-rouge {
+  background: #40202a;
+  color: var(--bad);
+}
+.chapter-dot {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  margin-inline-end: 0.5rem;
+  vertical-align: middle;
+}
+.chapter-dot.m-vert {
+  background: var(--ok);
+}
+.chapter-dot.m-orange {
+  background: var(--warn);
+}
+.chapter-dot.m-rouge {
+  background: var(--bad);
+}
+
+.exam-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  padding: 0.6rem 0;
+  z-index: 10;
+}
+.exam-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 1.1rem;
+  background: var(--surface-2);
+  padding: 0.25rem 0.7rem;
+  border-radius: 10px;
+}
+.exam-timer-low {
+  background: #40202a;
+  color: var(--bad);
+}
+.exam-question {
+  margin: 0.8rem 0;
+}
+.exam-question-head {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+.exam-review summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+}
+.exam-review[open] summary {
+  margin-bottom: 0.6rem;
+}
+.bilan-row {
+  display: grid;
+  grid-template-columns: 1fr 8rem 3rem;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.3rem 0;
+}
+@media (max-width: 640px) {
+  .bilan-row {
+    grid-template-columns: 1fr 3rem;
+  }
+  .bilan-bar {
+    grid-column: 1 / -1;
+  }
+}
+
+.recurring {
+  margin: 0.4rem 0 0.8rem;
+}
+.recurring-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+.recurring-tag {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.15rem 0.7rem;
+  font-size: 0.85rem;
+}
+.recurring-count {
+  color: var(--accent);
+  font-weight: 700;
+  margin-inline-start: 0.3rem;
+}
+
+.parent-gate {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+.parent-gate form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: center;
+  width: 100%;
+  max-width: 16rem;
+}
+.parent-code {
+  width: 100%;
+  text-align: center;
+  letter-spacing: 0.3em;
+  font-size: 1.2rem;
+}
+.mastery-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.mastery-table th {
+  text-align: start;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.mastery-table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.mastery-table td:last-child,
+.mastery-table th:last-child {
+  text-align: end;
+}
+.setting-row {
+  padding: 0.3rem 0;
+}
+.activity-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  height: 80px;
+  margin-top: 0.6rem;
+}
+.activity-day {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+.activity-bar {
+  width: 100%;
+  background: var(--accent);
+  border-radius: 4px 4px 0 0;
+  min-height: 4px;
+}
+
+.timer-fab {
+  position: fixed;
+  right: 1.2rem;
+  bottom: 1.2rem;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  z-index: 30;
+}
+.timer-fab:hover {
+  border-color: var(--accent);
+}
+.timer-card {
+  position: fixed;
+  right: 1.2rem;
+  bottom: 1.2rem;
+  width: 15rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.timer-break {
+  border-color: var(--ok);
+}
+.timer-time {
+  font-size: 2.4rem;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}

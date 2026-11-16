@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { api, type Exam, type Lesson, type Subject } from "../api";
 import { daysLabel } from "../components/Editors";
-import { Icon, Notice, Progress, Spinner } from "../components/Ui";
+import { Icon, Notice, Spinner } from "../components/Ui";
 import { useLoad, usePoll } from "../hooks";
 
 interface Group {
@@ -10,11 +10,18 @@ interface Group {
   chapters: { id: number; title: string; lessons: Lesson[] }[];
 }
 
+const COLOR_CLASS = { vert: "m-vert", orange: "m-orange", rouge: "m-rouge" } as const;
+
 function status(lesson: Lesson): string {
   if (lesson.mastered) return "Maîtrisée";
   if (lesson.generation.problem?.fatal) return "À relancer";
   if (lesson.generation.active && lesson.progress === 0) return "En préparation…";
   return lesson.current_step ? `Étape : ${lesson.current_step.label}` : "";
+}
+
+function chapterColor(lessons: Lesson[]): "rouge" | "orange" | "vert" {
+  const avg = lessons.reduce((n, l) => n + l.mastery, 0) / lessons.length;
+  return avg >= 75 ? "vert" : avg >= 40 ? "orange" : "rouge";
 }
 
 /** Toutes les leçons, par matière et par chapitre. */
@@ -50,7 +57,10 @@ export default function Lessons() {
           </div>
           {g.chapters.map((c) => (
             <div key={c.id} className="chapter">
-              <h3 dir="auto">{c.title}</h3>
+              <h3 dir="auto">
+                <span className={`chapter-dot ${COLOR_CLASS[chapterColor(c.lessons)]}`} aria-hidden="true" />
+                {c.title}
+              </h3>
               <ul className="rows">
                 {c.lessons.map((l) => (
                   <li key={l.id}>
@@ -59,8 +69,8 @@ export default function Lessons() {
                         {l.title}
                       </span>
                       <span className={`muted status ${l.mastered ? "ok-text" : ""}`}>{status(l)}</span>
-                      <span className="lesson-progress">
-                        <Progress value={l.progress} tone={l.mastered ? "ok" : undefined} />
+                      <span className={`mastery-pill ${COLOR_CLASS[l.color]}`} title="Score de maîtrise">
+                        {l.mastery} %
                       </span>
                     </Link>
                   </li>

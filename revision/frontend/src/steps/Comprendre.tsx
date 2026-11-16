@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, ApiError, type Explanation, type Video } from "../api";
 import { ChatPanel } from "../components/Chat";
 import { Md } from "../components/Md";
+import { MindMap } from "../components/MindMap";
 import { TrustNote } from "../components/Report";
 import { Icon, Notice } from "../components/Ui";
 import { usePoll } from "../hooks";
@@ -110,6 +111,14 @@ export default function Comprendre({ data, reload }: StepProps) {
           <TrustNote lessonId={data.lesson.id} target={`explication:partie-${index + 1}`} excerpt={section.contenu} />
         </article>
 
+        {data.mindmap && (
+          <section className="mindmap-section">
+            <h2>Carte mentale</h2>
+            <div className="card">
+              <MindMap map={data.mindmap} lang={lang} />
+            </div>
+          </section>
+        )}
         {videos.length > 0 && <Videos videos={videos} />}
         {data.videos == null && <p className="muted small">Je cherche des vidéos sur cette leçon…</p>}
 

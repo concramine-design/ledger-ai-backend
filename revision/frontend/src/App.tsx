@@ -6,14 +6,18 @@ import { useLoad } from "./hooks";
 import Home from "./pages/Home";
 import ImportPage from "./pages/ImportPage";
 import LessonPage from "./pages/LessonPage";
+import ControleBlanc, { ControlesList } from "./pages/ControleBlanc";
+import Devoirs from "./pages/Devoirs";
 import Lessons from "./pages/Lessons";
 import Methods from "./pages/Methods";
 import Mistakes from "./pages/Mistakes";
 import Onboarding from "./pages/Onboarding";
+import Parent from "./pages/Parent";
 import Planning from "./pages/Planning";
 import Revision from "./pages/Revision";
 import Settings from "./pages/Settings";
 import StepPage from "./pages/StepPage";
+import { FocusTimer } from "./components/FocusTimer";
 
 interface AppCtx {
   state: AppState;
@@ -48,7 +52,7 @@ function Shell() {
           </NavLink>
           <NavLink to="/planning">Planning</NavLink>
           <NavLink to="/lecons">Mes leçons</NavLink>
-          <NavLink to="/erreurs">Carnet d'erreurs</NavLink>
+          <NavLink to="/controles">Contrôle blanc</NavLink>
           <NavLink to="/importer">Importer</NavLink>
           <NavLink to="/reglages">Réglages</NavLink>
         </nav>
@@ -66,6 +70,7 @@ function Shell() {
       <main className="main">
         <Outlet />
       </main>
+      <FocusTimer />
     </div>
   );
 }
@@ -106,6 +111,10 @@ export default function App() {
             <Route path="planning" element={<Planning />} />
             <Route path="erreurs" element={<Mistakes />} />
             <Route path="chapitre/:id/methodes" element={<Methods />} />
+            <Route path="controles" element={<ControlesList />} />
+            <Route path="controle/:id" element={<ControleBlanc />} />
+            <Route path="anciens-devoirs" element={<Devoirs />} />
+            <Route path="parent" element={<Parent />} />
             <Route path="reglages" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

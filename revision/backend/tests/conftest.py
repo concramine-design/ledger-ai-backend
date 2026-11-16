@@ -27,6 +27,10 @@ def client(tmp_path, monkeypatch):
 
     config.get_config.cache_clear()
     llm.reset_llm()
+    from app.routers import parent
+
+    parent._sessions.clear()
+    parent._failures.clear()
     from app.main import app
 
     with TestClient(app) as c:

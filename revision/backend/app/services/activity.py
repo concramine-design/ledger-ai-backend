@@ -17,11 +17,10 @@ def touch(db: Session, pomodoro_minutes: int = 0, today: Optional[date] = None) 
     if row is None:
         row = ActivityDay(day=today, actions=0, pomodoros=0, minutes=0)
         db.add(row)
+    row.actions += 1
     if pomodoro_minutes:
         row.pomodoros += 1
         row.minutes += pomodoro_minutes
-    else:
-        row.actions += 1
 
 
 def streak(db: Session, today: Optional[date] = None) -> int:

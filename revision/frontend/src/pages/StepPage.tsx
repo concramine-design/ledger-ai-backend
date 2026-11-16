@@ -4,6 +4,8 @@ import { GenerationNotice, Icon, Notice, Spinner, SubjectChip } from "../compone
 import { useLoad, usePoll } from "../hooks";
 import Comprendre from "../steps/Comprendre";
 import Exercices from "../steps/Exercices";
+import Explique from "../steps/Explique";
+import Feuille from "../steps/Feuille";
 import Resume from "../steps/Resume";
 import TestStep from "../steps/TestStep";
 
@@ -16,7 +18,7 @@ export interface StepProps {
 export default function StepPage() {
   const { id, step } = useParams();
   const { data, error, reload } = useLoad(() => api.get<StepData>(`/lessons/${id}/steps/${step}`), [id, step]);
-  const waiting = !!data && !data.ready && !data.previous;
+  const waiting = !!data && !data.ready && !data.previous && data.step.key !== "feuille" && data.step.key !== "explique";
   usePoll(reload, waiting);
 
   if (error) {
@@ -62,6 +64,10 @@ export default function StepPage() {
         </div>
       ) : key === "comprendre" ? (
         <Comprendre data={data} reload={reload} />
+      ) : key === "feuille" ? (
+        <Feuille data={data} reload={reload} />
+      ) : key === "explique" ? (
+        <Explique data={data} reload={reload} />
       ) : key === "resume" ? (
         <Resume data={data} reload={reload} />
       ) : key === "minitest" || key === "quiz" ? (

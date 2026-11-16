@@ -27,25 +27,25 @@ Les clés se règlent uniquement dans le fichier `.env` (jamais dans le code).
 
 Après une modification de `.env`, ferme la fenêtre noire et relance l'application.
 
-## Ce que fait l'application (version 2)
+## Ce que fait l'application (version 3 — complète)
 
-- Premier lancement : matières, langue de chaque matière (français, arabe, anglais), dates des contrôles.
-- Import d'une leçon dans toutes les matières : photos du cahier, PDF ou texte collé.
-- Génération automatique en arrière-plan dès l'import : explication, sélection de vidéos, mini-test, résumé, quiz, exercices des trois niveaux, fiche « méthodes types ».
-- Parcours verrouillé : Comprendre, Mini-test, Résumé, Quiz complet, Exercices niveau 1, 2 puis 3. Chaque étape débloque la suivante.
-- Exercices selon la matière :
-  - Maths, Physique-Chimie, SVT : indices à 3 niveaux (piste, méthode, début de solution), correction détaillée en dernier recours, fiche « méthodes types » par chapitre. En SVT : analyse de documents et schémas à légender.
-  - Français, Arabe, Anglais : exercices de langue, compréhension de texte, production écrite corrigée par critères, avec les fautes expliquées sans réécriture.
-  - Philosophie : notions et auteurs en fiches, plan d'une question de réflexion, rédaction argumentée.
-- Vidéos : l'application cherche sur YouTube, compare les résultats et affiche les 3 meilleures avec la raison du choix.
-- Carnet d'erreurs : chaque erreur est notée, puis reposée plus tard sous une autre forme.
-- Répétition espacée : rappels à 1, 3, 7, 14 et 30 jours après une leçon maîtrisée, cartes mémoire tirées des fiches, rappels resserrés avant un contrôle.
-- Planning « à revoir aujourd'hui » : une séance courte qui mélange les matières.
-- Écran d'accueil « Ta prochaine étape » : la révision du jour d'abord, puis la leçon la plus urgente.
-- Chat sur la leçon, qui commence toujours par une question.
-- Bouton « Signaler une erreur » et rappel : en cas de désaccord, c'est le professeur qui a raison.
+**Préparation automatique.** Elle importe une leçon (photos du cahier, PDF ou texte collé) dans n'importe quelle matière. Dès l'import, et sans aucun bouton « générer », l'application prépare tout en arrière-plan : explication progressive, carte mentale, sélection de 3 vidéos YouTube, mini-test, résumé, quiz, exercices des trois niveaux et fiche « méthodes types ».
 
-Les étapes « Feuille blanche » et « Explique-moi », le contrôle blanc, la carte mentale, la série de jours, le minuteur et le mode parent arrivent dans la version 3.
+**Parcours guidé à étapes verrouillées.** Chaque étape se débloque quand la précédente est validée :
+1. **Comprendre** — explication pas à pas (exemples, vidéos, carte mentale) ; un chat qui commence toujours par une question.
+2. **Mini-test** — en cas d'échec, les points ratés sont réexpliqués autrement, puis un nouveau test.
+3. **Feuille blanche** — elle écrit de mémoire ; l'application compare avec la leçon et signale oublis et erreurs.
+4. **Résumé** — fiche de référence exportable en PDF ; ses définitions deviennent des cartes mémoire.
+5. **Quiz complet** — majorité de questions ouvertes, seuil 80 % (réglable).
+6. **Explique-moi** — elle explique avec ses mots, l'IA joue un élève qui pose des questions, puis évalue la clarté.
+7. **Exercices** niveau 1 → 2 → 3, chacun débloqué par le précédent.
+8. **Leçon maîtrisée**, puis rappels en répétition espacée.
+
+**Exercices selon la matière.** Maths/PC/SVT : indices à 3 niveaux puis correction détaillée, fiche « méthodes types », et en SVT analyse de documents et schémas à légender. Langues : grammaire, vocabulaire en flashcards, compréhension de texte, production écrite corrigée par critères sans réécriture. Philosophie : fiches notions et auteurs, plan, rédaction argumentée.
+
+**Révision et suivi.** Planning « à revoir aujourd'hui » (répétition espacée, séances qui mélangent les matières), carnet d'erreurs (chaque erreur reposée plus tard sous une autre forme), **contrôle blanc** chronométré au format d'un devoir surveillé noté sur 20 avec bilan des points à retravailler, import d'anciens devoirs (types de questions récurrents, style du professeur réutilisé), score de maîtrise par chapitre (rouge/orange/vert).
+
+**Interface.** Écran d'accueil « Ta prochaine étape » (la révision du jour d'abord), carte de progression par leçon, série de jours, minuteur de séance (25 min + pause), récompenses légères sans classement, formules en LaTeX, mode sombre, arabe de droite à gauche. **Mode parent/frère protégé par un code** : progression détaillée, résultats des contrôles blancs, erreurs signalées, et réglage des seuils de réussite. Bouton « Signaler une erreur » partout, avec le rappel : en cas de désaccord, c'est le professeur qui a raison.
 
 ## Vidéos YouTube
 

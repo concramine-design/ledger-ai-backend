@@ -67,6 +67,14 @@ export interface Lesson {
   current_ready?: boolean;
   has_methods?: boolean;
   open_mistakes?: number;
+  mastery: number;
+  color: "rouge" | "orange" | "vert";
+  mindmap?: MindMap | null;
+}
+
+export interface MindMap {
+  centre: string;
+  branches: { titre: string; feuilles: string[] }[];
 }
 
 export interface AppState {
@@ -79,6 +87,8 @@ export interface AppState {
     exercises_required: number;
   };
   ai: { configured: boolean; provider: string | null; demo: boolean };
+  youtube: boolean;
+  streak: number;
 }
 
 export interface StepInfo {
@@ -217,8 +227,11 @@ export interface StepData {
   ready: boolean;
   content?: Explanation | Summary | null;
   videos?: { status: string; videos: Video[] } | null;
+  mindmap?: MindMap | null;
   cards?: number;
   has_methods?: boolean;
+  feuille?: { submissions: FeuilleSubmission[] };
+  explique?: Talk;
   threshold?: number;
   set?: TestSet | null;
   previous?: (TestSet & { reexplain: { points: ReexplainPoint[] } | null }) | null;
@@ -369,3 +382,135 @@ export const api = {
 
 export const LANG_LABELS: Record<Lang, string> = { fr: "Français", ar: "Arabe", en: "Anglais" };
 export const KIND_LABELS: Record<Kind, string> = { sciences: "Sciences", langue: "Langue", philo: "Philosophie" };
+
+export interface FeuillePoint {
+  point: string;
+  etat: "ok" | "partiel" | "absent";
+  rappel: string;
+}
+
+export interface FeuilleResult {
+  points: FeuillePoint[];
+  erreurs: { extrait: string; correction: string }[];
+  message: string;
+}
+
+export interface FeuilleSubmission {
+  text: string;
+  coverage: number;
+  passed: boolean;
+  result: FeuilleResult;
+}
+
+export interface Talk {
+  attempt: number;
+  messages: { role: "eleve" | "camarade"; content: string }[];
+  evaluation: {
+    clarte: number;
+    exactitude: number;
+    completude: number;
+    reponses: number;
+    points_clairs: string;
+    a_ameliorer: string;
+    erreurs: string[];
+  } | null;
+  score: number | null;
+  passed: boolean | null;
+}
+
+export interface Activity {
+  streak: number;
+  history: { date: string; actions: number; pomodoros: number; minutes: number }[];
+  rewards: { key: string; label: string; description: string; earned: boolean }[];
+}
+
+export interface MockQuestion {
+  numero: string;
+  enonce: string;
+  points: number;
+  correction?: string;
+}
+
+export interface MockPaper {
+  titre: string;
+  exercices: { titre: string; contexte: string; questions: MockQuestion[] }[];
+}
+
+export interface MockResult {
+  note: number;
+  sur: number;
+  questions: {
+    numero: string;
+    points: number;
+    note: number;
+    commentaire: string;
+    correction: string;
+    notion: string;
+    lecon: string;
+    lesson_id: number | null;
+  }[];
+  bilan: { lecon: string; lesson_id: number | null; taux: number; notions: string[] }[];
+}
+
+export interface MockExam {
+  id: number;
+  subject: Subject;
+  language: Lang;
+  status: "pending" | "ready" | "started" | "graded" | "error";
+  error: string | null;
+  duration_min: number;
+  remaining_seconds: number | null;
+  lessons: string[];
+  paper: MockPaper | null;
+  summary: { exercices: number; questions: number } | null;
+  answers: Record<string, string>;
+  result: MockResult | null;
+  created_at: string;
+}
+
+export interface PastExam {
+  id: number;
+  subject_id: number;
+  title: string;
+  status: "pending" | "ready" | "error";
+  error: string | null;
+  analysis: {
+    duree_min: number | null;
+    structure: string;
+    types: { type: string; exemple: string; notions: string }[];
+    style: string;
+  } | null;
+  created_at: string;
+}
+
+export interface PastExamGroup {
+  subject: Subject;
+  exams: PastExam[];
+  recurring: { type: string; count: number; exemple: string }[];
+}
+
+export interface ParentOverview {
+  streak: number;
+  history: Activity["history"];
+  subjects: {
+    subject: Subject;
+    exam: { date: string; title: string } | null;
+    mastery: number;
+    lessons: {
+      id: number;
+      title: string;
+      chapter: string;
+      mastery: number;
+      color: "rouge" | "orange" | "vert";
+      mastered: boolean;
+      step: string;
+      scores: Record<string, number>;
+      open_mistakes: number;
+      last_activity: string | null;
+    }[];
+  }[];
+  open_mistakes: number;
+  mock_exams: { id: number; subject: string; note: number | null; date: string }[];
+  reports: { id: number; lesson: string; target: string; comment: string; excerpt: string; date: string }[];
+  settings: Record<string, number>;
+}

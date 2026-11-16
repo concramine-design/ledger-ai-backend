@@ -138,7 +138,7 @@ try {
   await page.getByRole("link", { name: /Continuer/ }).waitFor({ timeout: 30000 });
   ok("l'étape « Comprendre » est prête sans autre action");
   await page.waitForFunction(() => !document.querySelector(".preparing"), null, { timeout: 30000 });
-  check((await page.locator(".step-locked").count()) === 7, "les étapes suivantes sont verrouillées");
+  check((await page.locator(".step-locked").count()) === 9, "les étapes suivantes sont verrouillées");
   check(await page.getByRole("link", { name: /méthodes types/ }).isVisible(), "la fiche « méthodes types » est prête");
   await shot("parcours");
 
@@ -158,6 +158,8 @@ try {
   await page.locator(".lesson-card").waitFor();
   check((await page.locator(".katex").count()) > 0, "formules rendues avec KaTeX");
   check((await page.locator(".katex-error").count()) === 0, "aucune formule en erreur");
+  check((await page.locator(".mindmap-branch").count()) >= 2, "la carte mentale de la leçon s'affiche");
+  await shot("comprendre-carte-mentale");
   await btn("Poser une question").click();
   await page.getByPlaceholder("Écris ta question…").fill("C'est quoi une fonction paire ?");
   await btn("Envoyer").click();
@@ -176,6 +178,16 @@ try {
   await heading("Mini-test réussi").waitFor();
   await shot("minitest-reussi");
   await btn("Continuer").click();
+
+  console.log("6b. Feuille blanche");
+  await page.getByRole("link", { name: /Continuer/ }).click();
+  await heading("Feuille blanche").waitFor();
+  await page.locator(".answer-box textarea").fill(LESSON);
+  await btn("Comparer avec la leçon").click();
+  await page.locator(".element-ok").first().waitFor();
+  check(await page.locator(".badge", { hasText: "100 % de la leçon" }).first().isVisible(), "la feuille blanche est comparée à la leçon");
+  await shot("feuille-blanche");
+  await page.locator(".notice-ok").getByText("Continuer").click();
 
   console.log("7. Résumé");
   await page.getByRole("link", { name: /Continuer/ }).click();
@@ -211,6 +223,20 @@ try {
   await takeTest(true, "quiz-question-ouverte");
   await heading("Quiz réussi").waitFor();
   await btn("Continuer").click();
+
+  console.log("8b. Explique-moi");
+  await page.getByRole("link", { name: /Continuer/ }).click();
+  await heading("Explique-moi").waitFor();
+  const explanation = "Une fonction associe à chaque nombre une seule image. L'ensemble de définition regroupe les nombres qui ont une image, et la courbe montre tous les points.";
+  for (let i = 0; i < 3; i++) {
+    await page.locator(".chat-form textarea").fill(explanation + " Voila mon explication complete numero " + i + ".");
+    await page.getByRole("button", { name: /Expliquer|Répondre/ }).click();
+    await page.waitForFunction((n) => document.querySelectorAll(".talk .bubble-user").length > n, i, { timeout: 30000 });
+  }
+  await page.locator(".feedback").waitFor();
+  check(await page.getByText(/C'est clair/).isVisible(), "l'IA évalue la clarté de l'explication");
+  await shot("explique-moi");
+  await page.getByRole("button", { name: /Continuer/ }).click();
 
   console.log("9. Exercices : tentative, retour, correction en dernier recours, nouvel exercice");
   await page.getByRole("link", { name: /Continuer/ }).click();
@@ -251,7 +277,7 @@ try {
   console.log("10. Leçon maîtrisée");
   await page.locator(".path").waitFor();
   await page.locator(".notice").getByText(/Leçon maîtrisée/).waitFor();
-  check((await page.locator(".step-done").count()) === 8, "toutes les étapes sont allumées");
+  check((await page.locator(".step-done").count()) === 10, "toutes les étapes sont allumées");
   await shot("lecon-maitrisee");
   await page.goto(BASE);
   await heading("Tout est maîtrisé").waitFor();
@@ -304,10 +330,13 @@ try {
         }
       }
     };
-    const order = ["comprendre", "minitest", "resume", "quiz", "ex1", "ex2", "ex3"];
+    const order = ["comprendre", "minitest", "feuille", "resume", "quiz", "explique", "ex1", "ex2", "ex3"];
+    const longText = "Je pense que cette idee est importante parce qu'elle explique le monde. ".repeat(6);
     for (const key of order.slice(0, order.indexOf(until))) {
       if (key === "comprendre" || key === "resume") await post(`/lessons/${id}/steps/${key}/validate`);
       else if (key === "minitest" || key === "quiz") await answerTest(key, false);
+      else if (key === "feuille") await post(`/lessons/${id}/steps/feuille/submit`, { text: LESSON });
+      else if (key === "explique") { for (let k = 0; k < 3; k++) await post(`/lessons/${id}/steps/explique/message`, { text: longText }); }
       else {
         const step = await get(`/lessons/${id}/steps/${key}`);
         for (const ex of step.exercises.slice(0, step.progress.required)) await post(`/questions/${ex.id}/answer`, { answer_text: quoted(ex.enonce) });
@@ -427,9 +456,61 @@ try {
     console.log("15. Révision du jour : ignorée (chemin de la base non fourni)");
   }
 
-  console.log("16. Mes leçons et réglages");
+  console.log("16. Contrôle blanc chronométré, noté sur 20");
+  await page.goto(`${BASE}/controles`);
+  await page.getByRole("heading", { name: "Contrôle blanc", exact: true }).waitFor();
+  await page.locator("select").first().selectOption({ label: "Maths" });
+  await btn("Préparer le sujet").click();
+  await heading("Prête pour l'épreuve ?").waitFor({ timeout: 40000 });
+  await shot("controle-salle-attente");
+  await btn(/Commencer l'épreuve/).click();
+  await page.locator(".exam-timer").waitFor();
+  check(await page.locator(".exam-timer").isVisible(), "le chronomètre de l'épreuve tourne");
+  const examQuestions = await page.locator(".exam-question").count();
+  check(examQuestions >= 2, "le sujet contient plusieurs questions");
+  for (let i = 0; i < examQuestions; i++) {
+    const q = page.locator(".exam-question").nth(i);
+    const head = await q.locator(".exam-question-head").innerText();
+    const answer = head.includes("«") ? head.split("«")[1].split("»")[0].trim() : "une reponse";
+    await q.locator("textarea").fill(answer);
+  }
+  await shot("controle-epreuve");
+  page.once("dialog", (d) => d.accept());
+  await btn("Rendre ma copie").click();
+  await page.locator(".result-score").waitFor({ timeout: 40000 });
+  const note = await page.locator(".result-score").innerText();
+  check(/\/20$/.test(note.trim()), `la copie est notée sur 20 (${note.trim()})`);
+  check(await page.getByText("Points à retravailler").isVisible(), "le bilan des points à retravailler s'affiche");
+  await shot("controle-resultat");
+
+  console.log("17. Mode parent protégé par code");
+  await page.goto(`${BASE}/parent`);
+  await heading("Espace parent / frère").waitFor();
+  await page.getByPlaceholder("Code", { exact: true }).fill("2468");
+  await page.getByPlaceholder("Confirme le code").fill("2468");
+  await btn("Créer le code").click();
+  await page.locator(".mastery-table tbody tr").first().waitFor({ timeout: 20000 });
+  check((await page.locator(".mastery-table tbody tr").count()) >= 1, "la progression par leçon s'affiche dans l'espace parent");
+  check((await page.locator(".mastery-pill").count()) >= 1, "le score de maîtrise est coloré (rouge/orange/vert)");
+  await shot("mode-parent");
+  // Le code protège l'accès : nouvelle visite sans jeton -> retour à l'écran de code.
+  await page.goto(`${BASE}/parent`);
+  await page.getByPlaceholder("Code", { exact: true }).waitFor();
+  ok("l'espace parent redemande le code à chaque visite");
+
+  console.log("18. Série de jours et minuteur sur l'accueil");
+  await page.goto(BASE);
+  await page.locator(".streak").waitFor();
+  check(await page.locator(".streak").isVisible(), "la série de jours est affichée");
+  await page.locator(".timer-fab").click();
+  await page.locator(".timer-time").waitFor();
+  check(await page.getByText("25:00").isVisible(), "le minuteur de séance (25 min) s'ouvre");
+  await shot("minuteur");
+
+  console.log("19. Mes leçons et réglages");
   await page.goto(`${BASE}/lecons`);
   await page.getByText("Maîtrisée").first().waitFor();
+  check((await page.locator(".chapter-dot").count()) >= 1, "les chapitres ont une pastille rouge/orange/vert");
   await shot("mes-lecons");
   await page.goto(`${BASE}/reglages`);
   await heading("Réglages").waitFor();

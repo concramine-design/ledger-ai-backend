@@ -1,8 +1,37 @@
 import { Link } from "react-router-dom";
-import { api, type NextStep } from "../api";
+import { api, type Activity, type NextStep } from "../api";
 import { daysLabel, formatDate } from "../components/Editors";
 import { GenerationNotice, Icon, Notice, Spinner, SubjectChip } from "../components/Ui";
 import { useLoad, usePoll } from "../hooks";
+
+function StreakRewards() {
+  const { data } = useLoad(() => api.get<Activity>("/activity"), []);
+  if (!data) return null;
+  const earned = data.rewards.filter((r) => r.earned);
+  const active = data.history.filter((d) => d.actions + d.pomodoros > 0).length;
+  return (
+    <div className="streak-row">
+      <div className="streak">
+        <span className="streak-flame">🔥</span>
+        <div>
+          <strong>
+            {data.streak} jour{data.streak > 1 ? "s" : ""} de suite
+          </strong>
+          <span className="muted"> · {active} jours actifs sur 14</span>
+        </div>
+      </div>
+      {earned.length > 0 && (
+        <div className="rewards" title="Tes récompenses">
+          {earned.slice(-5).map((r) => (
+            <span key={r.key} className="reward" title={`${r.label} — ${r.description}`}>
+              <Icon name="star" size={14} /> {r.label}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Écran d'accueil : une seule chose, « Ta prochaine étape ». */
 export default function Home() {
@@ -20,25 +49,31 @@ export default function Home() {
 
   if (data.kind === "import") {
     return (
-      <section className="next card">
+      <>
+        <StreakRewards />
+        <section className="next card">
         <p className="eyebrow">Ta prochaine étape</p>
         <h1>Importe ta première leçon</h1>
         <p className="muted">Un PDF, des photos de ton cahier ou le texte collé. Je prépare tout le reste.</p>
         <Link className="btn btn-big" to="/importer">
           Importer une leçon <Icon name="arrow" />
         </Link>
-      </section>
+        </section>
+      </>
     );
   }
 
   if (data.kind === "review") {
     const { size } = data;
+    void StreakRewards;
     const parts = [
       size.questions ? `${size.questions} question${size.questions > 1 ? "s" : ""}` : "",
       size.cards ? `${size.cards} carte${size.cards > 1 ? "s" : ""} mémoire` : "",
     ].filter(Boolean);
     return (
-      <section className="next card">
+      <>
+        <StreakRewards />
+        <section className="next card">
         <p className="eyebrow">Ta prochaine étape</p>
         <p className="muted">{data.subjects.join(" · ")}</p>
         <h1>Révision du jour</h1>
@@ -52,13 +87,16 @@ export default function Home() {
         <Link className="link-btn" to="/planning">
           Voir mon planning
         </Link>
-      </section>
+        </section>
+      </>
     );
   }
 
   if (data.kind === "done") {
     return (
-      <section className="next card">
+      <>
+        <StreakRewards />
+        <section className="next card">
         <p className="eyebrow">Ta prochaine étape</p>
         <h1>Tout est maîtrisé</h1>
         <p className="muted">
@@ -68,13 +106,16 @@ export default function Home() {
         <Link className="btn btn-big" to="/importer">
           Importer une leçon <Icon name="arrow" />
         </Link>
-      </section>
+        </section>
+      </>
     );
   }
 
   const { lesson, step, exam } = data;
   return (
-    <section className="next card">
+    <>
+      <StreakRewards />
+      <section className="next card">
       <p className="eyebrow">Ta prochaine étape</p>
       <div className="row center-row">
         <SubjectChip name={lesson.subject.name} color={lesson.subject.color} />
@@ -101,6 +142,7 @@ export default function Home() {
       <Link className="link-btn" to={`/lecon/${lesson.id}`}>
         Voir le parcours de cette leçon
       </Link>
-    </section>
+      </section>
+    </>
   );
 }
