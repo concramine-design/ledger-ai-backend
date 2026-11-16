@@ -20,6 +20,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "quiz_threshold": 80,  # % pour valider le quiz complet
     "exercise_threshold": 70,  # % pour qu'un exercice compte comme réussi
     "exercises_required": 2,  # exercices réussis pour valider un niveau
+    "feuille_threshold": 50,  # % de la leçon retrouvée de mémoire pour valider la feuille blanche
+    "explique_threshold": 60,  # % de clarté pour valider « Explique-moi »
+    "parent_code": None,  # code de l'espace parent (haché)
 }
 
 # (code, nom, type, langue par défaut, couleur)

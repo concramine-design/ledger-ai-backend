@@ -42,8 +42,8 @@ def test_pdf_with_text_layer(client, mock_llm):
     assert resp.status_code == 200, resp.text
     lesson = resp.json()
     assert lesson["source_type"] == "pdf" and lesson["has_text"] is False
-    assert lesson["generation"]["total"] == 10 and lesson["generation"]["current"] == "Lecture du document"
-    assert run_jobs() == 10
+    assert lesson["generation"]["total"] == 11 and lesson["generation"]["current"] == "Lecture du document"
+    assert run_jobs() == 11
     assert "ocr" not in mock_llm.calls, "un PDF avec texte ne passe pas par l'OCR"
     source = client.get(f"/api/lessons/{lesson['id']}/source").json()["text"]
     assert "ensemble de définition" in source.replace("\n", " ")

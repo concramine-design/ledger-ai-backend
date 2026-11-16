@@ -297,6 +297,176 @@ class VideoRank(Tolerant):
     selection: list[VideoChoice] = Field(min_length=1)
 
 
+class FeuillePoint(Tolerant):
+    point: str = Field(min_length=1)
+    etat: Literal["ok", "partiel", "absent"] = "absent"
+    rappel: str = ""
+
+    _etat = field_validator("etat", mode="before")(EvalElement._etat.__func__)  # mêmes tolérances que la correction
+
+
+class FeuilleErreur(Tolerant):
+    extrait: str = ""
+    correction: str = Field(min_length=1)
+
+
+class FeuilleResult(Tolerant):
+    """Feuille blanche : ce qu'elle a retrouvé de mémoire, ses oublis, ses erreurs."""
+
+    points: list[FeuillePoint] = Field(min_length=1)
+    erreurs: list[FeuilleErreur] = []
+    message: str = ""
+
+    @property
+    def coverage(self) -> int:
+        weights = {"ok": 1.0, "partiel": 0.5, "absent": 0.0}
+        return round(100 * sum(weights[p.etat] for p in self.points) / len(self.points))
+
+
+def _grade(value: Any) -> float:
+    try:
+        return max(0.0, min(4.0, float(str(value).replace(",", ".").split("/")[0])))
+    except ValueError:
+        return 0.0
+
+
+class ExpliqueEval(Tolerant):
+    """« Explique-moi » : clarté de son explication, jugée après l'échange avec le camarade."""
+
+    clarte: float = 0
+    exactitude: float = 0
+    completude: float = 0
+    reponses: float = 0
+    points_clairs: str = ""
+    a_ameliorer: str = ""
+    erreurs: list[str] = []
+
+    _grades = field_validator("clarte", "exactitude", "completude", "reponses", mode="before")(_grade)
+    _lists = field_validator("erreurs", mode="before")(_as_list)
+
+    @property
+    def score(self) -> int:
+        return round(100 * (self.clarte + self.exactitude + self.completude + self.reponses) / 16)
+
+
+class MindBranch(Tolerant):
+    titre: str = Field(min_length=1)
+    feuilles: list[str] = []
+
+    _lists = field_validator("feuilles", mode="before")(_as_list)
+
+
+class MindMap(Tolerant):
+    centre: str = Field(min_length=1)
+    branches: list[MindBranch] = Field(min_length=2)
+
+
+class ExamQuestion(Tolerant):
+    numero: str = ""
+    enonce: str = Field(min_length=3)
+    points: float = Field(default=1, gt=0)
+    elements_attendus: list[str] = []
+    correction: str = ""
+    lecon: str = ""
+    notion: str = ""
+
+    _lists = field_validator("elements_attendus", mode="before")(_as_list)
+
+    @field_validator("numero", mode="before")
+    @classmethod
+    def _numero(cls, value: Any) -> str:
+        return str(value)
+
+    @field_validator("points", mode="before")
+    @classmethod
+    def _points(cls, value: Any) -> float:
+        try:
+            return float(str(value).replace(",", ".").split()[0])
+        except (ValueError, IndexError):
+            return 1.0
+
+
+class ExamExercise(Tolerant):
+    titre: str = ""
+    contexte: str = ""
+    questions: list[ExamQuestion] = Field(min_length=1)
+
+
+class ExamPaper(Tolerant):
+    """Contrôle blanc au format d'un devoir surveillé, ramené à 20 points."""
+
+    titre: str = ""
+    exercices: list[ExamExercise] = Field(min_length=1)
+
+    def normalise(self) -> None:
+        """Numérote les questions et ramène le barème à 20 points exactement (au demi-point)."""
+        questions = [q for ex in self.exercices for q in ex.questions]
+        for i, q in enumerate(questions, start=1):
+            q.numero = q.numero.strip() or str(i)
+        seen: set[str] = set()
+        for i, q in enumerate(questions, start=1):
+            if q.numero in seen:
+                q.numero = f"{q.numero} ({i})"
+            seen.add(q.numero)
+        total = sum(q.points for q in questions)
+        for q in questions:
+            q.points = max(0.5, round(q.points * 20 / total * 2) / 2)
+        drift = 20 - sum(q.points for q in questions)
+        biggest = max(questions, key=lambda q: q.points)
+        biggest.points = max(0.5, biggest.points + drift)
+
+
+class ExamNote(Tolerant):
+    numero: str = ""
+    note: float = 0
+    commentaire: str = ""
+
+    @field_validator("numero", mode="before")
+    @classmethod
+    def _numero(cls, value: Any) -> str:
+        return str(value)
+
+    @field_validator("note", mode="before")
+    @classmethod
+    def _note(cls, value: Any) -> float:
+        try:
+            return float(str(value).replace(",", ".").split("/")[0])
+        except ValueError:
+            return 0.0
+
+
+class ExamNotes(Tolerant):
+    notes: list[ExamNote] = Field(min_length=1)
+
+
+class ExamType(Tolerant):
+    type: str = Field(min_length=1)
+    exemple: str = ""
+    notions: str = ""
+
+    @field_validator("notions", mode="before")
+    @classmethod
+    def _join(cls, value: Any) -> str:
+        return ", ".join(str(v) for v in value) if isinstance(value, list) else str(value)
+
+
+class PastExamAnalysis(Tolerant):
+    """Ancien devoir : structure, types de questions, style du professeur."""
+
+    duree_min: Optional[int] = None
+    structure: str = ""
+    types: list[ExamType] = Field(min_length=1)
+    style: str = ""
+
+    @field_validator("duree_min", mode="before")
+    @classmethod
+    def _duree(cls, value: Any) -> Optional[int]:
+        try:
+            return int(float(str(value)))
+        except ValueError:
+            return None
+
+
 class ReexplainPoint(Tolerant):
     notion: str = ""
     ce_qui_a_coince: str = ""

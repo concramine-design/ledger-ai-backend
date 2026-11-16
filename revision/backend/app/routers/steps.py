@@ -9,10 +9,13 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db, get_settings
 from ..models import Attempt, Lesson, Question, QuestionSet, ReviewItem, utcnow
-from ..services import followup, parcours, srs
+from ..services import activity, followup, parcours, srs
 from ..services.evaluation import grade_mcq, grade_open, grade_schema, grade_writing
-from ..services.generation.generators import build_ctx, get_artifact
+from ..services.generation import prompts
+from ..services.generation.content import ExpliqueEval, FeuilleResult, validate
+from ..services.generation.generators import build_ctx, get_artifact, save_artifact
 from ..services.generation.worker import enqueue
+from ..services.llm import LLMRequest, get_llm
 from ..services.views import (
     exercise_succeeded,
     exercise_view,
@@ -68,12 +71,24 @@ def get_step(lesson_id: int, key: str, db: Session = Depends(get_db)) -> dict:
         "ready": step_ready(lesson, step),
     }
 
-    if step.job_kind in ("explanation", "summary"):
+    if key == "feuille":
+        art = get_artifact(lesson, "feuille")
+        out["threshold"] = settings["feuille_threshold"]
+        out["feuille"] = art.content if art else {"submissions": []}
+
+    elif key == "explique":
+        art = get_artifact(lesson, "explique")
+        out["threshold"] = settings["explique_threshold"]
+        out["explique"] = art.content if art else _new_talk(0)
+
+    elif step.job_kind in ("explanation", "summary"):
         art = get_artifact(lesson, step.job_kind)
         out["content"] = art.content if art else None
         if step.job_kind == "explanation":
             videos = get_artifact(lesson, "videos")
             out["videos"] = videos.content if videos else None
+            mindmap = get_artifact(lesson, "mindmap")
+            out["mindmap"] = mindmap.content if mindmap else None
         else:
             out["cards"] = sum(r.kind == "card" for r in lesson.reviews)
 
@@ -128,9 +143,127 @@ def validate_step(lesson_id: int, key: str, db: Session = Depends(get_db)) -> di
         parcours.mark_done(db, lesson, key)
         if step.job_kind == "summary":
             followup.on_summary_read(db, lesson)
+        activity.touch(db)
         db.commit()
     nxt = parcours.current_step(lesson)
     return {"ok": True, "next": nxt.key if nxt else None}
+
+
+# -- Étape 3 : feuille blanche -------------------------------------------------
+MIN_FEUILLE_WORDS = 15
+
+
+class TextIn(BaseModel):
+    text: str = Field(min_length=1, max_length=MAX_ANSWER_CHARS)
+
+
+@router.post("/lessons/{lesson_id}/steps/feuille/submit")
+def submit_feuille(lesson_id: int, body: TextIn, db: Session = Depends(get_db)) -> dict:
+    """Elle écrit de mémoire tout ce qu'elle a retenu ; l'IA compare avec la leçon et signale oublis et erreurs."""
+    lesson = get_lesson(db, lesson_id)
+    status = parcours.require_open(lesson, "feuille")
+    text = body.text.strip()
+    if len(text.split()) < MIN_FEUILLE_WORDS:
+        raise HTTPException(422, "Écris au moins quelques phrases : tout ce dont tu te souviens, même en désordre.")
+    settings = get_settings(db)
+    ctx = build_ctx(lesson)
+    req = LLMRequest(
+        task="feuille_compare",
+        system=prompts.system(ctx),
+        messages=[{"role": "user", "content": prompts.feuille_compare(ctx, text)}],
+        temperature=0.1,
+        payload={"text": ctx.text, "answer": text},
+    )
+    result = validate(FeuilleResult, get_llm().generate_json(req))  # en cas de panne : erreur 503, elle garde son texte
+    coverage = result.coverage
+    threshold = settings["feuille_threshold"]
+    passed = coverage >= threshold
+    art = get_artifact(lesson, "feuille")
+    submissions = list(art.content.get("submissions", [])) if art else []
+    submissions.append({"text": text, "coverage": coverage, "passed": passed, "result": result.model_dump()})
+    save_artifact(db, lesson, "feuille", {"submissions": submissions[-5:]})
+    if passed and status == "current":
+        parcours.mark_done(db, lesson, "feuille", coverage)
+    lesson.last_activity_at = utcnow()
+    activity.touch(db)
+    db.commit()
+    return {"coverage": coverage, "threshold": threshold, "passed": passed, "result": result.model_dump(), "step_done": passed}
+
+
+# -- Étape 6 : explique-moi ----------------------------------------------------
+STUDENT_QUESTIONS = 2  # le camarade pose deux questions, puis l'explication est évaluée
+MIN_EXPLAIN_WORDS = 12
+
+
+def _new_talk(attempt: int) -> dict[str, Any]:
+    return {"attempt": attempt, "messages": [], "evaluation": None, "score": None, "passed": None}
+
+
+@router.post("/lessons/{lesson_id}/steps/explique/message")
+def explique_message(lesson_id: int, body: TextIn, db: Session = Depends(get_db)) -> dict:
+    """Elle explique la leçon ; l'IA joue un élève qui pose des questions, puis évalue la clarté."""
+    lesson = get_lesson(db, lesson_id)
+    status = parcours.require_open(lesson, "explique")
+    settings = get_settings(db)
+    art = get_artifact(lesson, "explique")
+    talk = dict(art.content) if art else _new_talk(0)
+    if talk.get("evaluation"):
+        raise HTTPException(409, "Cette explication est terminée. Recommence pour réessayer.")
+    text = body.text.strip()
+    messages = list(talk["messages"])
+    said = sum(m["role"] == "eleve" for m in messages)
+    if said == 0 and len(text.split()) < MIN_EXPLAIN_WORDS:
+        raise HTTPException(422, "Explique la leçon en quelques phrases, comme à un camarade qui ne la connaît pas.")
+    messages.append({"role": "eleve", "content": text})
+    ctx = build_ctx(lesson)
+    llm = get_llm()
+
+    if said < STUDENT_QUESTIONS:  # le camarade pose une question
+        history = [{"role": "user" if m["role"] == "eleve" else "assistant", "content": m["content"]} for m in messages]
+        req = LLMRequest(
+            task="explique_question",
+            system=prompts.explique_system(ctx),
+            messages=history,
+            json_mode=False,
+            temperature=0.6,
+            payload={"round": said + 1},
+        )
+        question = llm.generate(req).strip()
+        messages.append({"role": "camarade", "content": question})
+        talk["messages"] = messages
+    else:  # fin de l'échange : évaluation
+        req = LLMRequest(
+            task="explique_eval",
+            system=prompts.system(ctx),
+            messages=[{"role": "user", "content": prompts.explique_eval(ctx, messages)}],
+            temperature=0.1,
+            payload={"messages": messages},
+        )
+        evaluation = validate(ExpliqueEval, llm.generate_json(req))
+        talk.update(
+            messages=messages,
+            evaluation=evaluation.model_dump(),
+            score=evaluation.score,
+            passed=evaluation.score >= settings["explique_threshold"],
+        )
+        if talk["passed"] and status == "current":
+            parcours.mark_done(db, lesson, "explique", evaluation.score)
+    save_artifact(db, lesson, "explique", talk)
+    lesson.last_activity_at = utcnow()
+    activity.touch(db)
+    db.commit()
+    return {"explique": talk, "threshold": settings["explique_threshold"], "step_done": bool(talk.get("passed"))}
+
+
+@router.post("/lessons/{lesson_id}/steps/explique/restart")
+def explique_restart(lesson_id: int, db: Session = Depends(get_db)) -> dict:
+    lesson = get_lesson(db, lesson_id)
+    parcours.require_open(lesson, "explique")
+    art = get_artifact(lesson, "explique")
+    talk = _new_talk((art.content.get("attempt", 0) + 1) if art else 0)
+    save_artifact(db, lesson, "explique", talk)
+    db.commit()
+    return {"explique": talk}
 
 
 class AnswerIn(BaseModel):
@@ -268,6 +401,7 @@ def answer(question_id: int, body: AnswerIn, db: Session = Depends(get_db)) -> d
             result["step_done"] = True
     if result["mastered"]:
         followup.on_mastered(db, lesson)
+    activity.touch(db)
     db.commit()
 
     if question.qtype == "exercice":

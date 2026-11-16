@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..config import APP_VERSION
+from ..config import APP_VERSION, get_config
 from ..db import get_db, get_settings, set_setting
 from ..models import Exam, Subject
+from ..services import activity
 from ..services.llm import get_llm
 from ..services.views import exam_view, subject_view
 
@@ -19,7 +20,7 @@ router = APIRouter(prefix="/api")
 Kind = Literal["sciences", "langue", "philo"]
 Lang = Literal["fr", "ar", "en"]
 _COLORS = ["#7c9cff", "#4fd1a5", "#f5b84a", "#ff8fa3", "#c79bff", "#5cc8f0", "#8bd450"]
-_THRESHOLDS = ("minitest_threshold", "quiz_threshold", "exercise_threshold")
+_THRESHOLDS = ("minitest_threshold", "quiz_threshold", "exercise_threshold", "feuille_threshold", "explique_threshold")
 
 
 @router.get("/health")
@@ -36,6 +37,8 @@ def state(db: Session = Depends(get_db)) -> dict:
         "onboarded": bool(settings["onboarded"]),
         "settings": {k: settings[k] for k in (*_THRESHOLDS, "exercises_required")},
         "ai": {"configured": llm.configured, "provider": llm.name, "demo": llm.demo},
+        "youtube": bool(get_config().youtube_api_key),
+        "streak": activity.streak(db),
     }
 
 
@@ -148,19 +151,3 @@ def complete_onboarding(db: Session = Depends(get_db)) -> dict:
     set_setting(db, "onboarded", True)
     db.commit()
     return {"ok": True}
-
-
-class SettingsPatch(BaseModel):
-    minitest_threshold: Optional[int] = Field(default=None, ge=40, le=100)
-    quiz_threshold: Optional[int] = Field(default=None, ge=50, le=100)
-    exercise_threshold: Optional[int] = Field(default=None, ge=40, le=100)
-    exercises_required: Optional[int] = Field(default=None, ge=1, le=3)
-
-
-@router.patch("/settings")
-def update_settings(body: SettingsPatch, db: Session = Depends(get_db)) -> dict:
-    for key, value in body.model_dump(exclude_none=True).items():
-        set_setting(db, key, value)
-    db.commit()
-    settings = get_settings(db)
-    return {k: settings[k] for k in (*_THRESHOLDS, "exercises_required")}

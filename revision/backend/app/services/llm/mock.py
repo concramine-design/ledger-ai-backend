@@ -164,6 +164,89 @@ class MockProvider(Provider):
             "notion": (p.get("mistake") or {}).get("notion", ""),
         }
 
+    def _mindmap(self, p: dict[str, Any]) -> dict[str, Any]:
+        s = sentences(p.get("text", ""))
+        return {
+            "centre": p.get("title", "Leçon"),
+            "branches": [
+                {"titre": f"Idée {i + 1}", "feuilles": [" ".join(s[(2 * i + j) % len(s)].split()[:6]) for j in range(2)]}
+                for i in range(4)
+            ],
+        }
+
+    def _feuille_compare(self, p: dict[str, Any]) -> dict[str, Any]:
+        """Règle simulée : un point est retrouvé si la feuille reprend les mots de la phrase."""
+        answer = p.get("answer", "")
+        points = []
+        for sent in sentences(p.get("text", ""))[:6]:
+            ratio = overlap(sent, answer)
+            state = "ok" if ratio >= 0.6 else "partiel" if ratio >= 0.3 else "absent"
+            points.append({"point": sent, "etat": state, "rappel": "" if state == "ok" else sent})
+        return {
+            "points": points,
+            "erreurs": [{"extrait": "une phrase fausse", "correction": "Ce que dit le cours."}] if "faux" in answer.lower() else [],
+            "message": "Tu as retenu une partie de la leçon. Revois d'abord les points manquants.",
+        }
+
+    def _explique_question(self, p: dict[str, Any]) -> str:
+        n = int(p.get("round", 1))
+        return ["Je n'ai pas bien compris : tu peux me donner un exemple ?", "D'accord, mais pourquoi est-ce que ça marche comme ça ?"][(n - 1) % 2]
+
+    def _explique_eval(self, p: dict[str, Any]) -> dict[str, Any]:
+        """Règle simulée : une explication d'au moins 40 mots en tout est jugée claire."""
+        words = sum(len(m["content"].split()) for m in p.get("messages", []) if m["role"] == "eleve")
+        note = 3 if words >= 40 else 1
+        return {
+            "clarte": note,
+            "exactitude": note,
+            "completude": note,
+            "reponses": note,
+            "points_clairs": "Tu as bien posé l'idée principale." if note == 3 else "",
+            "a_ameliorer": "Ajoute un exemple concret." if note == 3 else "Ton explication est trop courte pour être comprise.",
+            "erreurs": [],
+        }
+
+    def _past_exam_analysis(self, p: dict[str, Any]) -> dict[str, Any]:
+        known = list(p.get("known", []))
+        types = [{"type": "Application du cours", "exemple": "Appliquer une règle à un cas simple.", "notions": "règle du cours"}]
+        types.append({"type": known[1] if len(known) > 1 else "Justifier une réponse", "exemple": "Expliquer pourquoi.", "notions": "justification"})
+        if "problème" in str(p.get("text", "")).lower():
+            types.append({"type": "Problème de synthèse", "exemple": "Un problème en plusieurs étapes.", "notions": "synthèse"})
+        return {"duree_min": 60, "structure": "Deux exercices notés sur 20.", "types": types, "style": "Énoncés courts, une question de cours puis des applications."}
+
+    def _mock_exam(self, p: dict[str, Any]) -> dict[str, Any]:
+        exercices = []
+        for n, lesson in enumerate(p.get("lessons", []), start=1):
+            s = sentences(lesson.get("text", ""))
+            exercices.append(
+                {
+                    "titre": f"Exercice {n}",
+                    "contexte": f"Cet exercice porte sur la leçon « {lesson['title']} »." + (" Dans le style de ton professeur." if p.get("style") else ""),
+                    "questions": [
+                        {
+                            "numero": f"{n}.{j + 1}",
+                            "enonce": f"Explique avec tes mots : « {s[j % len(s)]} »",
+                            "points": 3 + j,
+                            "elements_attendus": [s[j % len(s)]],
+                            "correction": s[j % len(s)],
+                            "lecon": lesson["title"],
+                            "notion": f"Notion {j + 1}",
+                        }
+                        for j in range(3)
+                    ],
+                }
+            )
+        return {"titre": "Contrôle blanc", "exercices": exercices}
+
+    def _mock_exam_grade(self, p: dict[str, Any]) -> dict[str, Any]:
+        notes = []
+        for q in p.get("questions", []):
+            answer = (p.get("answers") or {}).get(q["numero"], "")
+            ratio = overlap(" ".join(q.get("elements_attendus", [])), answer)
+            fraction = 1.0 if ratio >= 0.6 else 0.5 if ratio >= 0.3 else 0.0
+            notes.append({"numero": q["numero"], "note": q["points"] * fraction, "commentaire": "Réponse complète." if fraction == 1 else "Il manque l'idée du cours."})
+        return {"notes": notes}
+
     def _methods(self, p: dict[str, Any]) -> dict[str, Any]:
         types = [t for t in p.get("types", []) if t] or ["Application du cours"]
         return {

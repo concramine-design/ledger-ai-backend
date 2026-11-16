@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Chapter, Exam, Mistake, QuestionSet, ReviewItem
-from ..services import srs
+from ..services import activity, srs
 from ..services.generation.generators import get_artifact
 from ..services.views import exam_view, subject_view, test_question_view
 
@@ -72,6 +72,7 @@ def answer_card(item_id: int, body: CardIn, db: Session = Depends(get_db)) -> di
     if item is None or item.kind != "card" or item.state != "active":
         raise HTTPException(404, "Carte introuvable.")
     result = srs.answer_card(db, item, body.knew)
+    activity.touch(db)
     db.commit()
     return result
 

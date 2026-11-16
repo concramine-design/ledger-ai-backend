@@ -31,6 +31,7 @@ JOB_LABELS = {
     "exercise_variant": "Nouvel exercice",
     "reexplain": "Nouvelle explication",
     "videos": "Sélection de vidéos",
+    "mindmap": "Carte mentale",
     "methods": "Méthodes types",
     "review_set": "Prochain rappel",
     "error_variant": "Reprise d'une erreur",
@@ -67,6 +68,7 @@ def enqueue_initial(db: Session, lesson: Lesson, pasted_text: str = "") -> None:
         enqueue(db, lesson, "extract", {"pasted_text": pasted_text}, priority=0)
     enqueue(db, lesson, "explanation", priority=10, depends_on="extract")
     enqueue(db, lesson, "minitest", {"version": 1}, priority=20, depends_on="explanation")
+    enqueue(db, lesson, "mindmap", priority=22, depends_on="explanation")
     enqueue(db, lesson, "videos", priority=25, depends_on="explanation")
     enqueue(db, lesson, "summary", priority=30, depends_on="explanation")
     enqueue(db, lesson, "quiz", {"version": 1}, priority=40, depends_on="explanation")
@@ -80,11 +82,16 @@ def backfill(db: Session) -> None:
     """Au démarrage : ajoute aux leçons existantes ce qu'une version plus récente sait générer."""
     from ...config import get_config
 
+    from .. import parcours
+
     has_key = bool(get_config().youtube_api_key)
     for lesson in db.query(Lesson).all():
         kinds = {j.kind for j in lesson.jobs}
         if "explanation" not in kinds:
             continue
+        parcours.adopt_new_steps(lesson)
+        if "mindmap" not in kinds:
+            enqueue(db, lesson, "mindmap", priority=22, depends_on="explanation")
         videos = next((a for a in lesson.artifacts if a.kind == "videos"), None)
         pending = any(j.kind == "videos" and j.status != "done" for j in lesson.jobs)
         retry = videos is not None and videos.content.get("status") in ("no_key", "key", "quota") and has_key

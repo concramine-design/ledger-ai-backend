@@ -7,22 +7,17 @@ import pytest
 
 from app.services.llm import LLMError
 
-from .conftest import bad_answer, good_answer, import_text, pass_exercises, run_jobs, subject_id, take_test
+from .conftest import advance, bad_answer, good_answer, import_text, pass_exercises, run_jobs, subject_id, take_test
 
 LONG_COPY = " ".join(["Je pense que cette idée est importante parce qu'elle explique le monde."] * 6)
 
 
 def _to_exercises(client, lid: int) -> None:
-    client.post(f"/api/lessons/{lid}/steps/comprendre/validate")
-    take_test(client, lid, "minitest")
-    client.post(f"/api/lessons/{lid}/steps/resume/validate")
-    take_test(client, lid, "quiz")
+    advance(client, lid, "ex1")
 
 
 def _master(client, lid: int) -> None:
-    _to_exercises(client, lid)
-    for level in (1, 2, 3):
-        pass_exercises(client, lid, level)
+    advance(client, lid)
 
 
 def _make_due(lesson_id: int, kind: str | None = None) -> None:
@@ -51,11 +46,10 @@ def _items(lesson_id: int) -> list[dict]:
 # -- Matières ------------------------------------------------------------------
 def test_language_lesson_has_vocabulary_cards_and_writing(client):
     lesson = import_text(client, code="francais", title="L'accord du participe passé")
-    assert lesson["generation"]["total"] == 8, "pas de fiche « méthodes types » pour une langue"
+    assert lesson["generation"]["total"] == 9, "pas de fiche « méthodes types » pour une langue"
     run_jobs()
     lid = lesson["id"]
-    client.post(f"/api/lessons/{lid}/steps/comprendre/validate")
-    take_test(client, lid, "minitest")
+    advance(client, lid, "resume")
 
     fiche = client.get(f"/api/lessons/{lid}/steps/resume").json()
     assert fiche["kind"] == "langue" and len(fiche["content"]["vocabulaire"]) == 4
@@ -64,9 +58,7 @@ def test_language_lesson_has_vocabulary_cards_and_writing(client):
     assert len(cards) == 3 + 4, "définitions et vocabulaire deviennent des cartes mémoire"
     assert all(c["due"] == date.today() + timedelta(days=1) for c in cards)
 
-    take_test(client, lid, "quiz")
-    pass_exercises(client, lid, 1)
-    pass_exercises(client, lid, 2)
+    advance(client, lid, "ex3")
 
     # Niveau 3 : production écrite, corrigée par critères, sans réécriture.
     step = client.get(f"/api/lessons/{lid}/steps/ex3").json()
@@ -87,14 +79,12 @@ def test_philosophy_plan_and_argumentation_levels(client):
     lesson = import_text(client, code="philo", title="La conscience")
     run_jobs()
     lid = lesson["id"]
-    client.post(f"/api/lessons/{lid}/steps/comprendre/validate")
-    take_test(client, lid, "minitest")
+    advance(client, lid, "resume")
     fiche = client.get(f"/api/lessons/{lid}/steps/resume").json()["content"]
     assert fiche["auteurs"][0]["these"]
     client.post(f"/api/lessons/{lid}/steps/resume/validate")
     assert sum(i["kind"] == "card" for i in _items(lid)) == 3 + 1  # notions + auteur
-    take_test(client, lid, "quiz")
-    pass_exercises(client, lid, 1)
+    advance(client, lid, "ex2")
     for level in (2, 3):
         step = client.get(f"/api/lessons/{lid}/steps/ex{level}").json()
         assert all(ex["mode"] == "redaction" for ex in step["exercises"]) and step["progress"]["required"] == 1
@@ -106,9 +96,7 @@ def test_svt_schema_question_and_documents(client):
     lesson = import_text(client, code="svt", title="Les échanges gazeux")
     run_jobs()
     lid = lesson["id"]
-    client.post(f"/api/lessons/{lid}/steps/comprendre/validate")
-    take_test(client, lid, "minitest")
-    client.post(f"/api/lessons/{lid}/steps/resume/validate")
+    advance(client, lid, "quiz")
 
     quiz = client.get(f"/api/lessons/{lid}/steps/quiz").json()
     schema = next(q for q in quiz["set"]["questions"] if q["type"] == "schema")
@@ -126,7 +114,7 @@ def test_svt_schema_question_and_documents(client):
             last = client.post(f"/api/questions/{q['id']}/answer", json=good_answer(q)).json()
     assert last["set"]["passed"] is True  # 6,5 / 7 = 93 %
 
-    pass_exercises(client, lid, 1)
+    advance(client, lid, "ex2")
     level2 = client.get(f"/api/lessons/{lid}/steps/ex2").json()
     assert all("| Mesure | Valeur |" in ex["document"] for ex in level2["exercises"])
 
@@ -273,9 +261,7 @@ def test_flashcards_are_self_graded(client):
     lesson = import_text(client)
     run_jobs()
     lid = lesson["id"]
-    client.post(f"/api/lessons/{lid}/steps/comprendre/validate")
-    take_test(client, lid, "minitest")
-    client.post(f"/api/lessons/{lid}/steps/resume/validate")
+    advance(client, lid, "quiz")
     client.post(f"/api/lessons/{lid}/steps/resume/validate")  # deux fois : pas de doublons
     assert sum(i["kind"] == "card" for i in _items(lid)) == 3
 
@@ -296,9 +282,7 @@ def test_session_mixes_lessons_and_subjects(client):
     physique = import_text(client, code="pc", title="Leçon de physique")
     run_jobs()
     for lesson in (maths, physique):
-        client.post(f"/api/lessons/{lesson['id']}/steps/comprendre/validate")
-        take_test(client, lesson["id"], "minitest")
-        client.post(f"/api/lessons/{lesson['id']}/steps/resume/validate")
+        advance(client, lesson["id"], "quiz")
         _make_due(lesson["id"])
     session = client.get("/api/reviews/today").json()
     order = [i["lesson"]["id"] for i in session["items"]]
@@ -401,14 +385,14 @@ def test_youtube_quota_or_bad_key_does_not_block(client, monkeypatch):
     lesson = import_text(client)
     run_jobs()
     detail = client.get(f"/api/lessons/{lesson['id']}").json()
-    assert detail["generation"]["problem"] is None and detail["generation"]["done"] == 9
+    assert detail["generation"]["problem"] is None and detail["generation"]["done"] == 10
     assert client.get(f"/api/lessons/{lesson['id']}/steps/comprendre").json()["videos"]["status"] == "quota"
 
     # Au prochain démarrage, la recherche est retentée.
     from app.services.generation.worker import recover_on_startup
 
     recover_on_startup()
-    assert client.get(f"/api/lessons/{lesson['id']}").json()["generation"]["total"] == 10
+    assert client.get(f"/api/lessons/{lesson['id']}").json()["generation"]["total"] == 11
 
 
 def test_youtube_network_failure_is_retried(client, monkeypatch):
@@ -475,11 +459,11 @@ def test_older_lessons_get_the_new_content_on_startup(client):
     from app.services.generation.worker import recover_on_startup
 
     lesson = import_text(client)
-    with session_scope() as db:  # leçon importée avec la version 1 : ni vidéos ni méthodes
-        for job in db.query(Job).filter(Job.kind.in_(["videos", "methods"])):
+    with session_scope() as db:  # leçon importée avec la version 1 : ni vidéos, ni méthodes, ni carte mentale
+        for job in db.query(Job).filter(Job.kind.in_(["videos", "methods", "mindmap"])):
             db.delete(job)
     assert client.get(f"/api/lessons/{lesson['id']}").json()["generation"]["total"] == 7
     recover_on_startup()
     recover_on_startup()  # sans doublon
-    assert client.get(f"/api/lessons/{lesson['id']}").json()["generation"]["total"] == 9
-    assert run_jobs() == 9
+    assert client.get(f"/api/lessons/{lesson['id']}").json()["generation"]["total"] == 10
+    assert run_jobs() == 10

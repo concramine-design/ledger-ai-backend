@@ -27,10 +27,10 @@ class Step:
 STEPS: list[Step] = [
     Step("comprendre", "Comprendre", "Lis l'explication pas à pas, avec des exemples.", 15, True, "explanation"),
     Step("minitest", "Mini-test", "Quelques questions pour vérifier que tu as compris.", 5, True, "minitest"),
-    Step("feuille", "Feuille blanche", "Écris de mémoire tout ce que tu as retenu.", 10, False),
+    Step("feuille", "Feuille blanche", "Écris de mémoire tout ce que tu as retenu.", 10, True),
     Step("resume", "Résumé", "Ta fiche de référence : définitions, formules, méthodes, pièges.", 5, True, "summary"),
     Step("quiz", "Quiz complet", "Des questions où tu écris tes réponses.", 15, True, "quiz"),
-    Step("explique", "Explique-moi", "Explique la leçon avec tes mots.", 10, False),
+    Step("explique", "Explique-moi", "Explique la leçon avec tes mots à un élève qui pose des questions.", 10, True),
     Step("ex1", "Exercices niveau 1", "Application directe du cours.", 20, True, "exercises", 1),
     Step("ex2", "Exercices niveau 2", "Exercices typiques de contrôle.", 25, True, "exercises", 2),
     Step("ex3", "Exercices niveau 3", "Exercices difficiles, pour viser haut.", 30, True, "exercises", 3),
@@ -121,3 +121,16 @@ def mark_done(db: Session, lesson: Lesson, key: str, score: Optional[int] = None
 
 def progress_percent(lesson: Lesson) -> int:
     return round(100 * len([s for s in ACTIVE_STEPS if s.key in done_steps(lesson)]) / len(ACTIVE_STEPS))
+
+
+def adopt_new_steps(lesson: Lesson) -> int:
+    """Une version plus récente a ajouté des étapes au milieu du parcours : pour une leçon déjà
+    plus avancée, elles sont considérées comme validées (on ne fait pas revenir l'élève en arrière)."""
+    done = done_steps(lesson)
+    added = 0
+    last_done = max((i for i, s in enumerate(ACTIVE_STEPS) if s.key in done), default=-1)
+    for step in ACTIVE_STEPS[: last_done + 1]:
+        if step.key not in done:
+            lesson.progress.append(StepProgress(step=step.key, score=None))
+            added += 1
+    return added

@@ -8,7 +8,7 @@ from typing import Any, Optional
 from sqlalchemy.orm import Session
 
 from ..models import Attempt, Exam, Job, Lesson, Question, QuestionSet, Subject, utcnow
-from . import parcours
+from . import activity, parcours
 from .generation.worker import job_label
 
 def subject_available(subject: Subject) -> bool:
@@ -87,6 +87,8 @@ def _sets(lesson: Lesson, kind: str, level: Optional[int] = None) -> list[Questi
 
 def step_ready(lesson: Lesson, step: parcours.Step) -> bool:
     """Le contenu de l'étape est-il généré ?"""
+    if step.key in ("feuille", "explique"):
+        return bool(lesson.raw_text)  # ces étapes partent de ce qu'elle écrit, rien à préparer
     if step.job_kind in ("explanation", "summary"):
         return any(a.kind == step.job_kind for a in lesson.artifacts)
     if step.job_kind in ("minitest", "quiz"):
@@ -113,7 +115,9 @@ def lesson_view(db: Session, lesson: Lesson, detailed: bool = False) -> dict[str
         "generation": generation_status(lesson),
         "has_text": bool(lesson.raw_text),
         "truncated": lesson.truncated,
+        "mastery": activity.lesson_mastery(lesson),
     }
+    out["color"] = activity.color(out["mastery"])
     if detailed:
         out["path"] = parcours.path(lesson)
         exam = next_exam(db, subject.id)
@@ -121,6 +125,8 @@ def lesson_view(db: Session, lesson: Lesson, detailed: bool = False) -> dict[str
         if cur:
             out["current_ready"] = step_ready(lesson, cur)
         out["has_methods"] = any(a.kind == "methods" for a in lesson.artifacts)
+        mindmap = next((a for a in lesson.artifacts if a.kind == "mindmap"), None)
+        out["mindmap"] = mindmap.content if mindmap else None
         out["open_mistakes"] = sum(m.resolved_at is None for m in lesson.mistakes)
     return out
 

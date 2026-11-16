@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 from .conftest import (
+    advance,
     bad_answer,
+    do_explique,
+    do_feuille,
     good_answer,
     import_text,
+    parent_headers,
     pass_exercises,
     run_jobs,
     subject_id,
@@ -37,18 +41,17 @@ def test_first_launch(client):
 def test_import_generates_everything_without_any_action(client):
     assert client.get("/api/next").json() == {"kind": "import"}
     lesson = import_text(client)
-    assert lesson["generation"] == {"total": 9, "done": 0, "active": True, "current": "Explication", "problem": None}
+    assert lesson["generation"] == {"total": 10, "done": 0, "active": True, "current": "Explication", "problem": None}
 
     nxt = client.get("/api/next").json()
     assert nxt["kind"] == "step" and nxt["step"]["key"] == "comprendre" and nxt["ready"] is False
 
-    assert run_jobs() == 9  # explication, mini-test, vidéos, résumé, quiz, 3 niveaux d'exercices, méthodes
+    assert run_jobs() == 10  # explication, mini-test, carte mentale, vidéos, résumé, quiz, 3 niveaux d'exercices, méthodes
     detail = client.get(f"/api/lessons/{lesson['id']}").json()
-    assert detail["generation"]["done"] == 9 and detail["generation"]["active"] is False
+    assert detail["generation"]["done"] == 10 and detail["generation"]["active"] is False
     assert detail["current_ready"] is True
-    assert [s["status"] for s in detail["path"]] == [
-        "current", "locked", "soon", "locked", "locked", "soon", "locked", "locked", "locked",
-    ]
+    assert [s["key"] for s in detail["path"]] == ["comprendre", "minitest", "feuille", "resume", "quiz", "explique", "ex1", "ex2", "ex3"]
+    assert [s["status"] for s in detail["path"]] == ["current"] + ["locked"] * 8
     content = client.get(f"/api/lessons/{lesson['id']}/steps/comprendre").json()["content"]
     assert content["sections"] and content["notions"]
 
@@ -57,12 +60,13 @@ def test_locked_steps_are_refused_by_the_server(client):
     lesson = import_text(client)
     run_jobs()
     lid = lesson["id"]
-    for key in ("minitest", "resume", "quiz", "ex1", "ex2", "ex3"):
+    for key in ("minitest", "feuille", "resume", "quiz", "explique", "ex1", "ex2", "ex3"):
         resp = client.get(f"/api/lessons/{lid}/steps/{key}")
         assert resp.status_code == 403, key
         assert "Comprendre" in resp.json()["detail"]
-    assert client.get(f"/api/lessons/{lid}/steps/feuille").status_code == 403
     assert client.post(f"/api/lessons/{lid}/steps/resume/validate").status_code == 403
+    assert client.post(f"/api/lessons/{lid}/steps/feuille/submit", json={"text": "x " * 40}).status_code == 403
+    assert client.post(f"/api/lessons/{lid}/steps/explique/message", json={"text": "x " * 40}).status_code == 403
     assert client.get(f"/api/lessons/{lid}/steps/inconnue").status_code == 404
 
     # Impossible de répondre au quiz en passant directement par l'identifiant d'une question.
@@ -93,6 +97,8 @@ def test_full_path_to_mastery(client):
     result = take_test_remaining(client, lid, "minitest")
     assert result["set"]["passed"] is True and result["set"]["score"] == 100 and result["step_done"] is True
 
+    assert client.get(f"/api/lessons/{lid}/steps/resume").status_code == 403
+    assert do_feuille(client, lid)["passed"] is True
     assert client.get(f"/api/lessons/{lid}/steps/quiz").status_code == 403
     summary = client.get(f"/api/lessons/{lid}/steps/resume").json()
     assert summary["content"]["definitions"]
@@ -104,6 +110,8 @@ def test_full_path_to_mastery(client):
     assert quiz["threshold"] == 80
     result = take_test(client, lid, "quiz")
     assert result["set"]["passed"] is True
+    assert client.get(f"/api/lessons/{lid}/steps/ex1").status_code == 403
+    assert do_explique(client, lid)["step_done"] is True
 
     for level in (1, 2, 3):
         if level < 3:
@@ -151,19 +159,20 @@ def test_failed_minitest_reexplains_then_offers_a_new_test(client):
 
     result = take_test(client, lid, "minitest")
     assert result["set"]["passed"] is True
-    assert client.get(f"/api/lessons/{lid}/steps/resume").status_code == 200
+    assert client.get(f"/api/lessons/{lid}/steps/feuille").status_code == 200
 
 
 def test_quiz_threshold_is_configurable(client):
     lesson = import_text(client)
     run_jobs()
     lid = lesson["id"]
-    client.post(f"/api/lessons/{lid}/steps/comprendre/validate")
-    take_test(client, lid, "minitest")
-    client.post(f"/api/lessons/{lid}/steps/resume/validate")
+    advance(client, lid, "quiz")
 
-    assert client.patch("/api/settings", json={"quiz_threshold": 30}).status_code == 422
-    assert client.patch("/api/settings", json={"quiz_threshold": 60}).json()["quiz_threshold"] == 60
+    # Les seuils ne se règlent que depuis l'espace parent.
+    assert client.patch("/api/settings", json={"quiz_threshold": 60}).status_code == 401
+    headers = parent_headers(client)
+    assert client.patch("/api/settings", json={"quiz_threshold": 30}, headers=headers).status_code == 422
+    assert client.patch("/api/settings", json={"quiz_threshold": 60}, headers=headers).json()["quiz_threshold"] == 60
 
     # 4 bonnes réponses sur 6 = 67 % : raté à 80 %, réussi à 60 %.
     step = client.get(f"/api/lessons/{lid}/steps/quiz").json()
@@ -178,10 +187,7 @@ def test_exercise_feedback_reveal_and_variant(client):
     lesson = import_text(client)
     run_jobs()
     lid = lesson["id"]
-    client.post(f"/api/lessons/{lid}/steps/comprendre/validate")
-    take_test(client, lid, "minitest")
-    client.post(f"/api/lessons/{lid}/steps/resume/validate")
-    take_test(client, lid, "quiz")
+    advance(client, lid, "ex1")
 
     step = client.get(f"/api/lessons/{lid}/steps/ex1").json()
     assert len(step["exercises"]) == 3 and step["progress"] == {"succeeded": 0, "required": 2}

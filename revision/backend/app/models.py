@@ -244,3 +244,46 @@ class ReviewItem(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     lesson: Mapped[Lesson] = relationship(back_populates="reviews")
+
+
+class ActivityDay(Base):
+    """Une ligne par jour travaillé : sert à la série de jours et au suivi du temps."""
+
+    __tablename__ = "activity_days"
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    actions: Mapped[int] = mapped_column(Integer, default=0)
+    pomodoros: Mapped[int] = mapped_column(Integer, default=0)
+    minutes: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class PastExam(Base):
+    """Ancien devoir surveillé importé : l'application y repère les types de questions qui reviennent."""
+
+    __tablename__ = "past_exams"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    subject_id: Mapped[int] = mapped_column(ForeignKey("subjects.id"))
+    title: Mapped[str] = mapped_column(String(200), default="")
+    files: Mapped[list] = mapped_column(JSON, default=list)
+    raw_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    analysis: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(12), default="pending")  # pending | ready | error
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class MockExam(Base):
+    """Contrôle blanc : épreuve chronométrée au format d'un devoir surveillé, notée sur 20."""
+
+    __tablename__ = "mock_exams"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    subject_id: Mapped[int] = mapped_column(ForeignKey("subjects.id"))
+    lesson_ids: Mapped[list] = mapped_column(JSON, default=list)
+    duration_min: Mapped[int] = mapped_column(Integer, default=60)
+    status: Mapped[str] = mapped_column(String(12), default="pending")  # pending | ready | started | graded | error
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    content: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    answers: Mapped[dict] = mapped_column(JSON, default=dict)
+    result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

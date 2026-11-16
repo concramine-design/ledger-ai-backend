@@ -15,6 +15,7 @@ from .content import (
     ExerciseOut,
     Explanation,
     Methods,
+    MindMap,
     QuestionOut,
     Reexplain,
     Summary,
@@ -185,7 +186,12 @@ def gen_exercises(db: Session, lesson: Lesson, job: Job) -> None:
         return
     ctx = build_ctx(lesson)
     redaction = prompts.is_redaction(ctx, level)
-    data = _ask_json("exercises", ctx, prompts.exercises(ctx, level), {"level": level, "redaction": redaction})
+    style = ""
+    if level >= 2:  # les exercices « typiques de contrôle » imitent les anciens devoirs de son professeur
+        from ..exams import style_hint
+
+        style = style_hint(db, lesson.subject.id)
+    data = _ask_json("exercises", ctx, prompts.exercises(ctx, level, style), {"level": level, "redaction": redaction, "style": style})
     exercises = validate_items(ExerciseOut, _items(data, "exercices"), minimum=1 if redaction else 2)[:4]
     qset = QuestionSet(kind="exercises", level=level)
     for i, ex in enumerate(exercises):
@@ -263,6 +269,17 @@ def gen_reexplain(db: Session, lesson: Lesson, job: Job) -> None:
     data = _ask_json("reexplain", ctx, prompts.reexplain(ctx, failed, test_name), {"failed": failed})
     content = validate(Reexplain, data)
     save_artifact(db, lesson, "reexplain", content.model_dump(), ref_id=set_id)
+
+
+def gen_mindmap(db: Session, lesson: Lesson, job: Job) -> None:
+    """Carte mentale de la leçon : un centre, des branches, des feuilles."""
+    ctx = build_ctx(lesson)
+    data = _ask_json("mindmap", ctx, prompts.mindmap(ctx), {})
+    mind = validate(MindMap, data)
+    mind.branches = mind.branches[:7]
+    for branch in mind.branches:
+        branch.feuilles = [f for f in branch.feuilles if f.strip()][:5]
+    save_artifact(db, lesson, "mindmap", mind.model_dump())
 
 
 def gen_methods(db: Session, lesson: Lesson, job: Job) -> None:
@@ -415,6 +432,7 @@ HANDLERS: dict[str, Callable[[Session, Lesson, Job], None]] = {
     "exercise_variant": gen_exercise_variant,
     "reexplain": gen_reexplain,
     "methods": gen_methods,
+    "mindmap": gen_mindmap,
     "videos": gen_videos,
     "review_set": gen_review_set,
     "error_variant": gen_error_variant,

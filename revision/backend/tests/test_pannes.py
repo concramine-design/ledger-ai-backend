@@ -35,9 +35,9 @@ def test_network_failure_keeps_job_queued_and_retries(client, mock_llm):
     # Le bouton « Réessayer » relance tout de suite, sans attendre le délai.
     assert run_pending(ignore_backoff=False) == 0
     client.post(f"/api/lessons/{lesson['id']}/retry")
-    assert run_pending(ignore_backoff=False) == 9
+    assert run_pending(ignore_backoff=False) == 10
     detail = client.get(f"/api/lessons/{lesson['id']}").json()
-    assert detail["generation"]["problem"] is None and detail["generation"]["done"] == 9
+    assert detail["generation"]["problem"] is None and detail["generation"]["done"] == 10
 
 
 def test_rate_limit_honours_retry_after(client, mock_llm):
@@ -64,7 +64,7 @@ def test_invalid_key_is_fatal_until_retry(client, mock_llm):
 
     client.post(f"/api/lessons/{lesson['id']}/retry")
     run_jobs()
-    assert client.get(f"/api/lessons/{lesson['id']}").json()["generation"]["done"] == 9
+    assert client.get(f"/api/lessons/{lesson['id']}").json()["generation"]["done"] == 10
 
 
 def test_bad_output_is_retried_three_times_then_fails(client, mock_llm):
@@ -90,7 +90,7 @@ def test_restart_resumes_interrupted_and_failed_jobs(client, mock_llm):
         jobs[0].status = "running"  # coupure en pleine génération
         jobs[1].status = "failed"
     recover_on_startup()
-    assert run_jobs() == 9
+    assert run_jobs() == 10
     assert all(status == "done" for status, _ in _jobs(lesson["id"]).values())
 
 
@@ -164,7 +164,7 @@ def test_replacing_the_source_regenerates_everything(client):
     assert client.put(f"/api/lessons/{lid}/source", json={"text": "trop court"}).status_code == 422
     new_text = LESSON_TEXT.replace("fonction", "application")
     detail = client.put(f"/api/lessons/{lid}/source", json={"text": new_text}).json()
-    assert detail["progress"] == 0 and detail["generation"]["done"] == 0 and detail["generation"]["total"] == 9
+    assert detail["progress"] == 0 and detail["generation"]["done"] == 0 and detail["generation"]["total"] == 10
     run_jobs()
     assert client.get(f"/api/lessons/{lid}/source").json()["text"] == new_text.strip()
     assert client.get(f"/api/lessons/{lid}/steps/minitest").status_code == 403

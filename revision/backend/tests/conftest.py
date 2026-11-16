@@ -97,3 +97,56 @@ def pass_exercises(client, lesson_id: int, level: int) -> dict:
         assert resp.status_code == 200, resp.text
         last = resp.json()
     return last
+
+
+LONG_TEXT = " ".join(["Je pense que cette idée est importante parce qu'elle explique le monde."] * 6)
+STEP_ORDER = ["comprendre", "minitest", "feuille", "resume", "quiz", "explique", "ex1", "ex2", "ex3"]
+
+
+def do_feuille(client, lesson_id: int, text: str = LESSON_TEXT) -> dict:
+    """Feuille blanche : recopier la leçon donne 100 % avec l'IA simulée."""
+    resp = client.post(f"/api/lessons/{lesson_id}/steps/feuille/submit", json={"text": text})
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+def do_explique(client, lesson_id: int, text: str = LONG_TEXT) -> dict:
+    """Explique-moi : une explication, puis deux réponses aux questions du camarade."""
+    last = {}
+    for _ in range(3):
+        resp = client.post(f"/api/lessons/{lesson_id}/steps/explique/message", json={"text": text})
+        assert resp.status_code == 200, resp.text
+        last = resp.json()
+    return last
+
+
+def advance(client, lesson_id: int, until: str | None = None) -> None:
+    """Valide les étapes dans l'ordre jusqu'à `until` (non comprise) ; sans `until`, jusqu'à la maîtrise."""
+    for key in STEP_ORDER:
+        if key == until:
+            return
+        status = next(s["status"] for s in client.get(f"/api/lessons/{lesson_id}").json()["path"] if s["key"] == key)
+        if status == "done":
+            continue
+        if key in ("comprendre", "resume"):
+            assert client.post(f"/api/lessons/{lesson_id}/steps/{key}/validate").status_code == 200
+        elif key in ("minitest", "quiz"):
+            take_test(client, lesson_id, key)
+        elif key == "feuille":
+            assert do_feuille(client, lesson_id)["passed"]
+        elif key == "explique":
+            assert do_explique(client, lesson_id)["step_done"]
+        else:
+            step = client.get(f"/api/lessons/{lesson_id}/steps/{key}").json()
+            for ex in step["exercises"][: step["progress"]["required"]]:
+                answer = LONG_TEXT if ex["mode"] == "redaction" else good_answer({"type": "ouverte", "enonce": ex["enonce"]})["answer_text"]
+                assert client.post(f"/api/questions/{ex['id']}/answer", json={"answer_text": answer}).status_code == 200
+
+
+def parent_headers(client, code: str = "1234") -> dict:
+    """Ouvre l'espace parent (crée le code au premier appel)."""
+    if client.get("/api/parent/status").json()["code_set"]:
+        token = client.post("/api/parent/login", json={"code": code}).json()["token"]
+    else:
+        token = client.post("/api/parent/setup", json={"code": code}).json()["token"]
+    return {"X-Parent-Token": token}
