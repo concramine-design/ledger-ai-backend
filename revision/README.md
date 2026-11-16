@@ -8,7 +8,7 @@ Tout tourne sur le PC : un seul programme, une base SQLite, l'interface dans le 
 
 1. Copie le dossier `revision` sur le PC (par exemple dans `Documents`).
 2. Double-clique sur `installer.bat`. Il installe Python si besoin, puis les composants.
-3. Le fichier `.env` s'ouvre dans le Bloc-notes : colle la clé Gemini après `GEMINI_API_KEY=`, enregistre, ferme.
+3. Le fichier `.env` s'ouvre dans le Bloc-notes : colle la clé Claude après `ANTHROPIC_API_KEY=` (ou, à défaut, une clé Gemini gratuite après `GEMINI_API_KEY=`), enregistre, ferme.
 4. Double-clique sur le raccourci **Mes révisions** créé sur le bureau. Le navigateur s'ouvre sur `http://127.0.0.1:8765`.
 
 Une fenêtre noire reste ouverte (réduite) pendant l'utilisation : la fermer arrête l'application.
@@ -19,10 +19,12 @@ Les clés se règlent uniquement dans le fichier `.env` (jamais dans le code).
 
 | Variable | Rôle |
 | --- | --- |
+| `ANTHROPIC_API_KEY` | Clé de l'API Claude (console.anthropic.com, payante à l'usage). IA principale : explications, questions, correction, lecture des photos. |
+| `CLAUDE_MODEL`, `CLAUDE_EFFORT` | Modèle (`claude-opus-5-5` par défaut, `claude-sonnet-5-5` plus rapide et moins cher) et profondeur de réflexion (`medium` par défaut). |
 | `YOUTUBE_API_KEY` | Facultative. Clé YouTube Data API v3 pour la sélection de vidéos. |
-| `GEMINI_API_KEY` | Clé Gemini, gratuite sur https://aistudio.google.com/apikey. Sert aussi à lire les photos du cahier. |
+| `GEMINI_API_KEY` | Facultative. Clé Gemini gratuite (aistudio.google.com/apikey) : IA de secours, ou IA principale si aucune clé Claude n'est remplie. |
 | `GROQ_API_KEY` | Facultative, sur https://console.groq.com/keys. Sert de secours si Gemini est saturé. |
-| `LLM_PROVIDER` | `auto` (Gemini puis Groq), `gemini`, `groq`, ou `mock` pour essayer sans clé avec des contenus factices. |
+| `LLM_PROVIDER` | `auto` (Claude, puis Gemini et Groq en secours), `claude`, `gemini`, `groq`, ou `mock` pour essayer sans clé. |
 | `GEMINI_MODEL`, `GROQ_MODEL` | Nom du modèle. Si le modèle indiqué n'existe plus, l'application en choisit un autre toute seule. |
 
 Après une modification de `.env`, ferme la fenêtre noire et relance l'application.
@@ -90,7 +92,7 @@ Le dossier `frontend/dist` est versionné exprès : le PC de l'élève n'a besoi
 
 Organisation du code :
 
-- `backend/app/services/llm` : fournisseurs Gemini, Groq et IA simulée, derrière une interface commune.
+- `backend/app/services/llm` : fournisseurs Claude, Gemini, Groq et IA simulée, derrière une interface commune.
 - `backend/app/services/generation` : file de tâches, consignes données à l'IA, validation des réponses.
 - `backend/app/services/parcours.py` : étapes verrouillées, décidées côté serveur.
 - `backend/app/services/srs.py` : répétition espacée, carnet d'erreurs, planning du jour.

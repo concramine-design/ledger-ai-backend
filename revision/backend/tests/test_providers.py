@@ -179,7 +179,7 @@ def test_groq_without_vision_model(monkeypatch):
 
 def _config(**kw) -> Config:
     base = dict(
-        data_dir=None, llm_provider="auto", gemini_api_key="", gemini_model="gemini-3.6-flash", groq_api_key="",
+        data_dir=None, llm_provider="auto", anthropic_api_key="", claude_model="claude-opus-5-5", claude_effort="medium", gemini_api_key="", gemini_model="gemini-3.6-flash", groq_api_key="",
         groq_model="auto", groq_vision_model="auto", youtube_api_key="", port=8765, run_worker=False, lesson_max_chars=30000,
     )
     return Config(**{**base, **kw})
@@ -242,3 +242,100 @@ def test_gemini_overload_without_alternative_is_transient(monkeypatch):
     with pytest.raises(LLMError) as err:
         GeminiProvider("CLE", "gemini-3.6-flash").generate(_req())
     assert err.value.kind == "server" and err.value.transient
+
+
+# -- Claude --------------------------------------------------------------------
+class _Block:
+    def __init__(self, type_, text=""):
+        self.type, self.text = type_, text
+
+
+class _Resp:
+    def __init__(self, text, stop="end_turn"):
+        self.content = [_Block("thinking"), _Block("text", text)]
+        self.stop_reason = stop
+
+
+def _claude(monkeypatch, behaviour):
+    from app.services.llm.claude import ClaudeProvider
+
+    provider = ClaudeProvider("CLE", "claude-opus-5-5")
+    calls = []
+
+    def create(**params):
+        calls.append(params)
+        return behaviour(params)
+
+    monkeypatch.setattr(provider.client.beta.messages, "create", create)
+    monkeypatch.setattr(provider.client.messages, "create", create)
+    return provider, calls
+
+
+def test_claude_request_shape(monkeypatch):
+    provider, calls = _claude(monkeypatch, lambda p: _Resp('{"a": 1}'))
+    messages = [{"role": "user", "content": "Q1"}, {"role": "assistant", "content": "R1"}, {"role": "user", "content": "Q2"}]
+    assert provider.generate(_req(messages=messages, images=[(b"img", "image/jpeg")])) == '{"a": 1}'
+    p = calls[0]
+    assert p["model"] == "claude-opus-5-5" and p["system"] == "Tu es professeur."
+    assert p["fallbacks"] == "default" and p["betas"] == ["server-side-fallback-2026-07-01"]
+    assert p["output_config"] == {"effort": "medium"}
+    assert "temperature" not in p and "thinking" not in p
+    last = p["messages"][2]["content"]
+    assert last[0]["type"] == "image" and last[0]["source"]["media_type"] == "image/jpeg" and last[1] == {"type": "text", "text": "Q2"}
+    assert p["messages"][0] == {"role": "user", "content": "Q1"}
+
+    provider.generate(_req(task="chat"))
+    assert calls[-1]["output_config"] == {"effort": "low"}, "le chat répond vite"
+
+
+def test_claude_refusal_and_truncation(monkeypatch):
+    provider, _ = _claude(monkeypatch, lambda p: _Resp("", stop="refusal"))
+    with pytest.raises(LLMError) as err:
+        provider.generate(_req())
+    assert err.value.kind == "blocked"
+    provider, _ = _claude(monkeypatch, lambda p: _Resp('{"a": ', stop="max_tokens"))
+    with pytest.raises(LLMError) as err:
+        provider.generate(_req())
+    assert err.value.kind == "bad_output"
+
+
+@pytest.mark.parametrize(
+    "status, body, kind",
+    [
+        (401, {"type": "error", "error": {"type": "authentication_error", "message": "invalid x-api-key"}}, "auth"),
+        (404, {"type": "error", "error": {"type": "not_found_error", "message": "model: nope"}}, "bad_model"),
+        (429, {"type": "error", "error": {"type": "rate_limit_error", "message": "slow down"}}, "rate_limit"),
+        (529, {"type": "error", "error": {"type": "overloaded_error", "message": "Overloaded"}}, "server"),
+        (400, {"type": "error", "error": {"type": "invalid_request_error", "message": "Your credit balance is too low"}}, "billing"),
+    ],
+)
+def test_claude_errors(monkeypatch, status, body, kind):
+    import anthropic
+
+    def fail(params):
+        response = httpx.Response(status, json=body, request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"))
+        raise anthropic.Anthropic(api_key="x")._make_status_error_from_response(response)
+
+    provider, _ = _claude(monkeypatch, fail)
+    with pytest.raises(LLMError) as err:
+        provider.generate(_req())
+    assert err.value.kind == kind
+
+
+def test_claude_network_error(monkeypatch):
+    import anthropic
+
+    def fail(params):
+        raise anthropic.APIConnectionError(request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"))
+
+    provider, _ = _claude(monkeypatch, fail)
+    with pytest.raises(LLMError) as err:
+        provider.generate(_req())
+    assert err.value.kind == "network" and err.value.transient
+
+
+def test_claude_comes_first_when_its_key_is_set():
+    llm = build_llm(_config(anthropic_api_key="a", gemini_api_key="g"))
+    assert [p.name for p in llm.providers] == ["claude", "gemini"]
+    assert build_llm(_config(anthropic_api_key="a", gemini_api_key="g", llm_provider="gemini")).name == "gemini"
+    assert build_llm(_config(anthropic_api_key="a")).name == "claude"

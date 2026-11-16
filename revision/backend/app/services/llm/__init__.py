@@ -6,6 +6,7 @@ from typing import Any, Optional
 
 from ...config import Config, get_config
 from .base import LLMError, LLMRequest, Provider
+from .claude import ClaudeProvider
 from .gemini import GeminiProvider
 from .groq import GroqProvider
 from .jsonfix import parse_json
@@ -64,9 +65,11 @@ def build_llm(cfg: Config) -> LLM:
     choice = cfg.llm_provider
     if choice == "mock":
         return LLM([MockProvider()])
+    claude = ClaudeProvider(cfg.anthropic_api_key, cfg.claude_model, cfg.claude_effort) if cfg.anthropic_api_key else None
     gemini = GeminiProvider(cfg.gemini_api_key, cfg.gemini_model) if cfg.gemini_api_key else None
     groq = GroqProvider(cfg.groq_api_key, cfg.groq_model, cfg.groq_vision_model) if cfg.groq_api_key else None
-    order = [groq, gemini] if choice == "groq" else [gemini, groq]
+    # Claude d'abord ; les autres servent de secours si leur clé est présente.
+    order = {"gemini": [gemini, claude, groq], "groq": [groq, claude, gemini]}.get(choice, [claude, gemini, groq])
     return LLM([p for p in order if p is not None])
 
 

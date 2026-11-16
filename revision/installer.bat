@@ -41,7 +41,8 @@ if exist ".env" goto :shortcut
 copy /y ".env.example" ".env" >nul
 echo.
 echo Le fichier .env vient d'etre cree et s'ouvre dans le Bloc-notes.
-echo Colle ta cle Gemini apres GEMINI_API_KEY= puis enregistre et ferme le Bloc-notes.
+echo Colle ta cle Claude apres ANTHROPIC_API_KEY= (ou une cle Gemini apres GEMINI_API_KEY=)
+echo puis enregistre et ferme le Bloc-notes.
 start /wait notepad ".env"
 
 rem --- 4. Raccourci sur le bureau ---------------------------------

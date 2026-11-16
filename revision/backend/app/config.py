@@ -19,7 +19,10 @@ APP_VERSION = "3.0"
 @dataclass(frozen=True)
 class Config:
     data_dir: Path
-    llm_provider: str  # auto | gemini | groq | mock
+    llm_provider: str  # auto | claude | gemini | groq | mock
+    anthropic_api_key: str
+    claude_model: str
+    claude_effort: str
     gemini_api_key: str
     gemini_model: str
     groq_api_key: str
@@ -50,6 +53,9 @@ def get_config() -> Config:
     return Config(
         data_dir=data_dir,
         llm_provider=_env("LLM_PROVIDER", "auto").lower(),
+        anthropic_api_key=_env("ANTHROPIC_API_KEY"),
+        claude_model=_env("CLAUDE_MODEL", "claude-opus-5-5"),
+        claude_effort=_env("CLAUDE_EFFORT", "medium").lower(),
         gemini_api_key=_env("GEMINI_API_KEY"),
         gemini_model=_env("GEMINI_MODEL", "gemini-3.6-flash"),
         groq_api_key=_env("GROQ_API_KEY"),

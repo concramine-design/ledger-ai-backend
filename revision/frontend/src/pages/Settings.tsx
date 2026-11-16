@@ -5,7 +5,7 @@ import { ExamsEditor, SubjectsEditor } from "../components/Editors";
 import { Icon, Spinner } from "../components/Ui";
 import { useLoad } from "../hooks";
 
-const PROVIDERS: Record<string, string> = { gemini: "Gemini", groq: "Groq", mock: "IA simulée (démonstration)" };
+const PROVIDERS: Record<string, string> = { claude: "Claude", gemini: "Gemini", groq: "Groq", mock: "IA simulée (démonstration)" };
 
 /** Réglages : matières, langues, contrôles, seuils de réussite. */
 export default function Settings() {

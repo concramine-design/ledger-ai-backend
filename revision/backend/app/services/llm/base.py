@@ -13,7 +13,9 @@ ERROR_MESSAGES = {
     "config": "Aucune clé d'IA n'est configurée. Demande à ton frère ou à tes parents de remplir le fichier .env.",
     "bad_output": "L'IA a répondu de travers. Je réessaie.",
     "blocked": "L'IA a refusé de traiter ce contenu. Réessaie, ou reformule.",
-    "no_vision": "La lecture des photos demande une clé Gemini (ou un modèle Groq capable de lire les images).",
+    "no_vision": "La lecture des photos demande une clé Claude ou Gemini.",
+    "billing": "Le crédit de la clé Claude est épuisé. Demande à ton frère ou à tes parents de recharger le compte Anthropic.",
+    "bad_model": "Le modèle d'IA indiqué dans le fichier .env n'existe pas. Demande à ton frère ou à tes parents de le corriger.",
     "input": "Je n'ai pas réussi à lire ce document. Essaie avec une photo plus nette, ou colle le texte de la leçon.",
     "internal": "Une erreur inattendue est survenue. Réessaie ; si ça continue, préviens ton frère ou tes parents.",
 }
