@@ -339,3 +339,21 @@ def test_claude_comes_first_when_its_key_is_set():
     assert [p.name for p in llm.providers] == ["claude", "gemini"]
     assert build_llm(_config(anthropic_api_key="a", gemini_api_key="g", llm_provider="gemini")).name == "gemini"
     assert build_llm(_config(anthropic_api_key="a")).name == "claude"
+
+
+def test_gemini_falls_back_when_the_free_quota_is_reached(monkeypatch):
+    models = {"models": [
+        {"name": "models/gemini-3.6-flash", "supportedGenerationMethods": ["generateContent"]},
+        {"name": "models/gemini-2.5-flash", "supportedGenerationMethods": ["generateContent"]},
+    ]}
+
+    def responder(method, url, body):
+        if method == "GET":
+            return 200, models
+        if "gemini-3.6-flash" in url:
+            return 429, {"error": {"message": "You exceeded your current quota"}}
+        return 200, GEMINI_OK
+
+    server = FakeServer(monkeypatch, responder)
+    assert GeminiProvider("CLE", "gemini-3.6-flash").generate(_req()) == '{"a": 1}'
+    assert server.calls[-1]["url"].endswith("gemini-2.5-flash:generateContent")

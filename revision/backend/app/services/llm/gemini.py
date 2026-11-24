@@ -129,8 +129,9 @@ class GeminiProvider(Provider):
             if resp.status_code == 200:
                 return self._text(resp.json())
             err = self._error(resp)
-            if err.kind == "server" and not fell_back:
-                # Modèle surchargé (« high demand ») : on essaie tout de suite un autre modèle Gemini.
+            if err.kind in ("server", "rate_limit") and not fell_back:
+                # Modèle surchargé (« high demand ») ou limite gratuite atteinte : chaque modèle Gemini a son
+                # propre quota, on essaie donc tout de suite un autre modèle.
                 fell_back = True
                 alternative = self._fallback(model)
                 if alternative:
