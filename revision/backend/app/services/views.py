@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..models import Attempt, Exam, Job, Lesson, Question, QuestionSet, Subject, utcnow
 from . import activity, parcours
-from .generation.worker import job_label
+from .generation.worker import claude_deadline, job_label, waiting_for_claude
 
 def subject_available(subject: Subject) -> bool:
     """Depuis la version 2, toutes les matières ont leur parcours."""
@@ -72,12 +72,21 @@ def generation_status(lesson: Lesson) -> dict[str, Any]:
     waiting = sorted((j for j in jobs if j.status == "pending"), key=lambda j: (j.priority, j.id))
     current = running or (waiting[0] if waiting else None)
     problem = _problem(failed[0]) if failed else _problem(retrying[0]) if retrying else None
+    now = utcnow()
+    for_claude = [j for j in jobs if waiting_for_claude(j, now)]
     return {
         "total": len(jobs),
         "done": done,
         "active": done < len(jobs),
         "current": job_label(current) if current else None,
         "problem": problem,
+        # Préparation par Claude : nombre de tâches qui l'attendent et heure du relais automatique (UTC).
+        "claude": {
+            "waiting": len(for_claude),
+            "until": max(claude_deadline(j) for j in for_claude).isoformat() + "Z",
+        }
+        if for_claude
+        else None,
     }
 
 

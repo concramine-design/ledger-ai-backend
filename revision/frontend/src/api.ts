@@ -37,6 +37,8 @@ export interface Generation {
   active: boolean;
   current: string | null;
   problem: Problem | null;
+  /** Préparation par Claude : tâches qui l'attendent et heure du relais automatique (UTC). */
+  claude?: { waiting: number; until: string } | null;
 }
 
 export type StepStatus = "done" | "current" | "locked" | "soon";
@@ -88,6 +90,7 @@ export interface AppState {
   };
   ai: { configured: boolean; provider: string | null; demo: boolean };
   youtube: boolean;
+  preparation: { by: "gemini" | "claude"; limit: string };
   streak: number;
 }
 

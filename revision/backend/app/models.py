@@ -107,6 +107,8 @@ class Job(Base):
     depends_on: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     priority: Mapped[int] = mapped_column(Integer, default=50)
     status: Mapped[str] = mapped_column(String(12), default="pending")  # pending|running|done|failed
+    # « claude » : réservée à la préparation par Claude (MCP) jusqu'au délai de repli ; sinon la file s'en charge.
+    executor: Mapped[Optional[str]] = mapped_column(String(8), nullable=True, default="auto")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     error_kind: Mapped[Optional[str]] = mapped_column(String(24), nullable=True)
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

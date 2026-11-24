@@ -30,6 +30,8 @@ class Config:
     groq_vision_model: str
     youtube_api_key: str
     port: int
+    preparation_par: str  # gemini (préparation automatique) | claude (préparation par Claude via MCP)
+    heure_limite_claude: str  # « HH:MM », heure locale à laquelle la préparation automatique prend le relais
     run_worker: bool
     lesson_max_chars: int
 
@@ -63,6 +65,8 @@ def get_config() -> Config:
         groq_vision_model=_env("GROQ_VISION_MODEL", "auto"),
         youtube_api_key=_env("YOUTUBE_API_KEY"),
         port=int(_env("PORT", "8765")),
+        preparation_par=_env("PREPARATION_PAR", "gemini").lower(),
+        heure_limite_claude=_env("HEURE_LIMITE_CLAUDE", "07:00"),
         run_worker=_env("REVISION_WORKER", "1") != "0",
         lesson_max_chars=int(_env("LESSON_MAX_CHARS", "30000")),
     )

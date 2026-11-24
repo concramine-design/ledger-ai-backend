@@ -41,7 +41,7 @@ def test_first_launch(client):
 def test_import_generates_everything_without_any_action(client):
     assert client.get("/api/next").json() == {"kind": "import"}
     lesson = import_text(client)
-    assert lesson["generation"] == {"total": 10, "done": 0, "active": True, "current": "Explication", "problem": None}
+    assert lesson["generation"] == {"total": 10, "done": 0, "active": True, "current": "Explication", "problem": None, "claude": None}
 
     nxt = client.get("/api/next").json()
     assert nxt["kind"] == "step" and nxt["step"]["key"] == "comprendre" and nxt["ready"] is False

@@ -16,7 +16,7 @@ from ..db import get_db
 from ..models import Chapter, Lesson, LessonFile, Subject
 from ..services import parcours, srs
 from ..services.generation.generators import IMAGE_EXT
-from ..services.generation.worker import enqueue_initial, retry_lesson
+from ..services.generation.worker import enqueue_initial, hand_over_to_gemini, retry_lesson
 from ..services.views import exam_view, generation_status, lesson_view, next_exam, step_ready, subject_available, subject_view
 
 router = APIRouter(prefix="/api")
@@ -150,6 +150,15 @@ def delete_lesson(lesson_id: int, db: Session = Depends(get_db)) -> dict:
 def retry(lesson_id: int, db: Session = Depends(get_db)) -> dict:
     lesson = get_lesson(db, lesson_id)
     retry_lesson(db, lesson)
+    db.commit()
+    return lesson_view(db, lesson, detailed=True)
+
+
+@router.post("/lessons/{lesson_id}/prepare-now")
+def prepare_now(lesson_id: int, db: Session = Depends(get_db)) -> dict:
+    """Ne pas attendre Claude : la préparation automatique s'en charge tout de suite."""
+    lesson = get_lesson(db, lesson_id)
+    hand_over_to_gemini(db, lesson)
     db.commit()
     return lesson_view(db, lesson, detailed=True)
 

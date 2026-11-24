@@ -55,6 +55,12 @@ export default function Settings() {
         )}
         <p className="muted">Les clés se règlent dans le fichier .env du dossier de l'application, jamais ici.</p>
         <p className="muted">Vidéos YouTube : {state.youtube ? "activées" : "désactivées (ajoute YOUTUBE_API_KEY dans .env)"}.</p>
+        <p className="muted">
+          Préparation des leçons :{" "}
+          {state.preparation.by === "claude"
+            ? `par Claude, la nuit (si Claude n'est pas passé à ${state.preparation.limit}, la préparation automatique prend le relais).`
+            : "automatique, dès l'import."}
+        </p>
       </section>
     </div>
   );

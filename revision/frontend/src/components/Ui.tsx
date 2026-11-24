@@ -85,6 +85,27 @@ export function GenerationNotice({ lessonId, generation, onRetried }: { lessonId
     );
   }
   if (!generation.active) return null;
+  if (generation.claude && generation.claude.waiting > 0) {
+    const until = new Date(generation.claude.until).toLocaleString("fr-FR", { weekday: "long", hour: "2-digit", minute: "2-digit" });
+    const prepareNow = async () => {
+      try {
+        await api.post(`/lessons/${lessonId}/prepare-now`);
+      } finally {
+        onRetried?.();
+      }
+    };
+    return (
+      <Notice tone="info">
+        <p>
+          <strong>Claude prépare ta leçon pendant la nuit.</strong> Elle sera prête pour ta prochaine séance, au plus tard {until}.
+        </p>
+        <p className="muted">Tu veux commencer tout de suite ? La préparation automatique peut s'en charger maintenant.</p>
+        <button className="btn btn-small" onClick={() => void prepareNow()}>
+          Préparer maintenant
+        </button>
+      </Notice>
+    );
+  }
   return (
     <div className="preparing">
       <Spinner small />

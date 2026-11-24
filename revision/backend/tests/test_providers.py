@@ -180,7 +180,7 @@ def test_groq_without_vision_model(monkeypatch):
 def _config(**kw) -> Config:
     base = dict(
         data_dir=None, llm_provider="auto", anthropic_api_key="", claude_model="claude-opus-5-5", claude_effort="medium", gemini_api_key="", gemini_model="gemini-3.6-flash", groq_api_key="",
-        groq_model="auto", groq_vision_model="auto", youtube_api_key="", port=8765, run_worker=False, lesson_max_chars=30000,
+        groq_model="auto", groq_vision_model="auto", youtube_api_key="", port=8765, preparation_par="gemini", heure_limite_claude="07:00", run_worker=False, lesson_max_chars=30000,
     )
     return Config(**{**base, **kw})
 

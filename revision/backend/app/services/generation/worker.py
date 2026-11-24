@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import threading
 from contextlib import closing
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session
@@ -37,6 +37,10 @@ JOB_LABELS = {
     "error_variant": "Reprise d'une erreur",
 }
 
+# Tâches prévisibles, que Claude peut préparer la nuit (mode PREPARATION_PAR=claude).
+# Les réactions immédiates (nouveau test après un échec, ré-explication, nouvel exercice) restent automatiques.
+CLAUDE_KINDS = {"extract", "explanation", "minitest", "mindmap", "summary", "quiz", "exercises", "methods", "review_set", "error_variant"}
+
 _BACKOFF = [10, 20, 45, 90, 180, 300]  # secondes
 _MAX_BAD_OUTPUT = 3
 
@@ -48,6 +52,43 @@ def job_label(job: Job) -> str:
     return label
 
 
+def _executor(kind: str, params: dict[str, Any]) -> str:
+    from ...config import get_config
+
+    if get_config().preparation_par != "claude" or kind not in CLAUDE_KINDS:
+        return "auto"
+    if kind in ("minitest", "quiz") and int(params.get("version", 1)) > 1:
+        return "auto"  # nouveau test après un échec : elle ne doit pas attendre le lendemain
+    return "claude"
+
+
+def _limit_time() -> tuple[int, int]:
+    from ...config import get_config
+
+    try:
+        hour, minute = (int(x) for x in get_config().heure_limite_claude.strip().split(":"))
+        if 0 <= hour < 24 and 0 <= minute < 60:
+            return hour, minute
+    except ValueError:
+        pass
+    return 7, 0
+
+
+def claude_deadline(job: Job) -> datetime:
+    """Heure (UTC) à partir de laquelle la file prend le relais si Claude n'est pas passé :
+    la prochaine HEURE_LIMITE_CLAUDE (heure locale du PC) après la création de la tâche."""
+    hour, minute = _limit_time()
+    created = job.created_at.replace(tzinfo=timezone.utc).astimezone()  # heure locale du PC
+    target = created.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= created:
+        target += timedelta(days=1)
+    return target.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def waiting_for_claude(job: Job, now=None) -> bool:
+    return job.status == "pending" and job.executor == "claude" and claude_deadline(job) > (now or utcnow())
+
+
 def enqueue(
     db: Session,
     lesson: Lesson,
@@ -56,7 +97,7 @@ def enqueue(
     priority: int = 50,
     depends_on: Optional[str] = None,
 ) -> Job:
-    job = Job(kind=kind, params=params or {}, priority=priority, depends_on=depends_on)
+    job = Job(kind=kind, params=params or {}, priority=priority, depends_on=depends_on, executor=_executor(kind, params or {}))
     lesson.jobs.append(job)
     db.flush()
     return job
@@ -117,6 +158,8 @@ def claim_next(db: Session, ignore_backoff: bool = False) -> Optional[int]:
     for job in db.query(Job).filter(Job.status == "pending").order_by(Job.priority, Job.id):
         if not ignore_backoff and job.next_try_at and job.next_try_at > now:
             continue
+        if waiting_for_claude(job, now):
+            continue  # réservée à Claude jusqu'au délai de repli
         if not _runnable(db, job):
             continue
         job.status = "running"
@@ -198,6 +241,17 @@ def recover_on_startup() -> None:
             job.next_try_at = None
         backfill(db)
         db.commit()
+
+
+def hand_over_to_gemini(db: Session, lesson: Lesson) -> int:
+    """Bouton « Préparer maintenant » : la file prépare tout de suite ce qui attendait Claude."""
+    count = 0
+    for job in lesson.jobs:
+        if waiting_for_claude(job):
+            job.executor = "auto"
+            job.next_try_at = None
+            count += 1
+    return count
 
 
 def retry_lesson(db: Session, lesson: Lesson) -> None:

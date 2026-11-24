@@ -1,8 +1,10 @@
 """Point d'entrée de l'IA : choisit le fournisseur et bascule sur l'autre en cas de panne."""
 from __future__ import annotations
 
+import contextvars
 import logging
-from typing import Any, Optional
+from contextlib import contextmanager
+from typing import Any, Iterator, Optional
 
 from ...config import Config, get_config
 from .base import LLMError, LLMRequest, Provider
@@ -14,7 +16,9 @@ from .mock import MockProvider
 
 log = logging.getLogger("revision.llm")
 
-__all__ = ["LLM", "LLMError", "LLMRequest", "get_llm", "reset_llm", "parse_json"]
+__all__ = ["LLM", "LLMError", "LLMRequest", "get_llm", "reset_llm", "parse_json", "use_llm"]
+
+_override: contextvars.ContextVar[Optional["LLM"]] = contextvars.ContextVar("llm_override", default=None)
 
 
 class LLM:
@@ -76,8 +80,21 @@ def build_llm(cfg: Config) -> LLM:
 _llm: LLM | None = None
 
 
+@contextmanager
+def use_llm(llm: "LLM") -> Iterator[None]:
+    """Remplace l'IA le temps d'un bloc (préparation par Claude via MCP)."""
+    token = _override.set(llm)
+    try:
+        yield
+    finally:
+        _override.reset(token)
+
+
 def get_llm() -> LLM:
     global _llm
+    override = _override.get()
+    if override is not None:
+        return override
     if _llm is None:
         _llm = build_llm(get_config())
     return _llm

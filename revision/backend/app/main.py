@@ -18,6 +18,7 @@ from .services.llm import LLMError
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s")
 # httpx écrit chaque adresse appelée dans le journal : on le fait taire pour qu'aucune clé n'y apparaisse.
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpx2").setLevel(logging.WARNING)
 
 
 @asynccontextmanager

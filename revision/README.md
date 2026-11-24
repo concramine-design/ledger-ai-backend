@@ -49,6 +49,25 @@ Après une modification de `.env`, ferme la fenêtre noire et relance l'applicat
 
 **Interface.** Écran d'accueil « Ta prochaine étape » (la révision du jour d'abord), carte de progression par leçon, série de jours, minuteur de séance (25 min + pause), récompenses légères sans classement, formules en LaTeX, mode sombre, arabe de droite à gauche. **Mode parent/frère protégé par un code** : progression détaillée, résultats des contrôles blancs, erreurs signalées, et réglage des seuils de réussite. Bouton « Signaler une erreur » partout, avec le rappel : en cas de désaccord, c'est le professeur qui a raison.
 
+## Préparation des leçons par Claude (la nuit, avec ton abonnement)
+
+Au lieu de faire préparer les leçons par Gemini dès l'import, on peut les faire préparer par **Claude**, avec l'abonnement Claude de la famille, sans clé API :
+
+- Le soir, l'élève importe sa leçon dans Révision. La préparation **attend Claude** : explication, tests, exercices, résumé, carte mentale, rappels et reprises d'erreurs du lendemain.
+- Dans l'**application Claude pour ordinateur**, sur le même PC, on écrit : **« Prépare les leçons »**. Claude lit les photos, écrit chaque contenu au format demandé par Révision, et Révision vérifie tout avant d'enregistrer.
+- Les échanges en direct restent à **Gemini** : corrections, chat, feuille blanche, « Explique-moi », nouveau test après un échec.
+- **Elle n'est jamais bloquée** : si Claude n'est pas passé à `HEURE_LIMITE_CLAUDE` (7 h du matin par défaut), Gemini prend le relais tout seul. Le bouton « Préparer maintenant » permet aussi de ne pas attendre.
+
+Mise en place, une seule fois :
+1. Installe l'application Claude pour ordinateur (claude.ai/download) et connecte-toi.
+2. Double-clique sur **`connecter_claude.bat`**. Il branche Révision dans Claude et met `PREPARATION_PAR=claude` dans `.env`. L'ancienne configuration de Claude est gardée en `.sauvegarde`.
+3. Quitte complètement Claude (icône près de l'horloge → Quitter) puis rouvre-le, et relance Révision.
+4. Dans Claude, choisis le modèle **Opus**, puis écris « Prépare les leçons ». Le serveur propose aussi l'invite toute faite `preparer_lecons`.
+
+Attention : l'application Claude reste connectée à ton compte sur ce PC. Garde-la fermée ou verrouillée si tu ne veux pas que ton compte soit utilisé pour autre chose.
+
+Outils exposés à Claude : `travail_en_attente`, `lire_lecon`, `lire_page`, `enregistrer_texte_lecon`, `obtenir_consigne`, `enregistrer_contenu` (`backend/app/mcp_server.py`).
+
 ## Vidéos YouTube
 
 Ajoute `YOUTUBE_API_KEY` dans `.env` (clé gratuite, voir les indications dans `.env.example`). Le quota gratuit est de 10 000 unités par jour ; une leçon en consomme environ 200.

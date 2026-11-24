@@ -38,6 +38,7 @@ def state(db: Session = Depends(get_db)) -> dict:
         "settings": {k: settings[k] for k in (*_THRESHOLDS, "exercises_required")},
         "ai": {"configured": llm.configured, "provider": llm.name, "demo": llm.demo},
         "youtube": bool(get_config().youtube_api_key),
+        "preparation": {"by": get_config().preparation_par, "limit": get_config().heure_limite_claude},
         "streak": activity.streak(db),
     }
 
